@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Flask
+instance/
+.webassets-cache
+
+# Ambiente virtual
+venv/
+venv_new/
+venv312/
+ENV/
+.venv/
+
+# Variáveis de ambiente (contêm informações sensíveis)
+.env
+.env.local
+.env.production
+.flaskenv
+.env.original
+
+# Banco de dados
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups e diagnósticos
+backup_data/
+backup_utils/
+diagnosticos/
+
+# Arquivos de sessão
+flask_session/
+
+# Arquivos de log
+*.log
+logs/
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db 

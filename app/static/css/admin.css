@@ -1,0 +1,132 @@
+/* Estilos específicos para a área administrativa */
+.admin-dashboard {
+    padding: 1.5rem 0;
+}
+
+.admin-dashboard h1 {
+    margin-bottom: 2rem;
+    font-weight: 600;
+}
+
+.admin-dashboard .card {
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.admin-dashboard .table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+.admin-dashboard .btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+/* Formulários administrativos */
+#content-editor {
+    min-height: 300px;
+    font-family: 'Courier New', monospace;
+}
+
+.form-label {
+    font-weight: 500;
+}
+
+.form-text {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* Estatísticas */
+.stat-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    background: #e9ecef;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 1.5rem;
+}
+
+.stat-content h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+}
+
+.stat-content p {
+    margin-bottom: 0;
+    color: #6c757d;
+}
+
+/* Botões e ações */
+.btn-action {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.9rem;
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+    .admin-dashboard .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .admin-dashboard .btn-group .btn {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Modais de confirmação */
+.modal-backdrop {
+    opacity: 0.5;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #000;
+    z-index: 1040;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    outline: 0;
+}
+
+.modal.fade.show {
+    display: block;
+}
+
+.modal-dialog {
+    position: relative;
+    margin: 10vh auto;
+    width: 500px;
+    max-width: 95%;
+    pointer-events: auto;
+}
+
+.modal-content {
+    background-color: #fff;
+    border-radius: 0.3rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+} 

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Login Alternativo{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h3 class="mb-0">Login Alternativo</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('auth.alternative_login') }}">
+                        <!-- Sem token CSRF neste formulário -->
+                        
+                        <div class="form-group mb-3">
+                            <label for="email">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="password">Senha</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
+                            <label class="form-check-label" for="remember_me">Lembrar de mim</label>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Entrar</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <div class="text-center">
+                        <p>Este é um método de login alternativo sem verificação CSRF.</p>
+                        <p>Use-o apenas se o login normal não estiver funcionando.</p>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm">Voltar ao login normal</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

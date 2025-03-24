@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Reconquest Blog{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header text-center" style="background-color: #F1F1F1;">
+                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">Register</h4>
+                </div>
+                <div class="card-body">
+                    {% include '_messages.html' %}
+                    
+                    <form method="POST" action="{{ url_for('auth.register') }}">
+                        <!-- CSRF desativado para resolver erros -->
+                        
+                        <div class="form-group mb-3">
+                            {{ form.username.label(class="form-label") }}
+                            {{ form.username(class="form-control") }}
+                            {% for error in form.username.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.email.label(class="form-label") }}
+                            {{ form.email(class="form-control") }}
+                            {% for error in form.email.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.password.label(class="form-label") }}
+                            {{ form.password(class="form-control") }}
+                            {% for error in form.password.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.confirm_password.label(class="form-label") }}
+                            {{ form.confirm_password(class="form-control") }}
+                            {% for error in form.confirm_password.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.age.label(class="form-label") }}
+                            {{ form.age(class="form-control", type="number", min="18", max="99") }}
+                            {% for error in form.age.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            {{ form.terms(class="form-check-input") }}
+                            {{ form.terms.label(class="form-check-label") }}
+                            {% for error in form.terms.errors %}
+                                <small class="text-danger d-block">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            {{ form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

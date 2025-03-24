@@ -1,0 +1,18 @@
+<!-- Menu lateral para a área administrativa -->
+<div class="list-group mb-4">
+    <a href="{{ url_for('admin.dashboard') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+        <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+    </a>
+    <a href="{{ url_for('admin.create_post') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.create_post' %}active{% endif %}">
+        <i class="fas fa-pen me-2"></i> Novo Post
+    </a>
+    <a href="{{ url_for('admin.pending_comments') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.pending_comments' %}active{% endif %}">
+        <i class="fas fa-comments me-2"></i> Comentários Pendentes 
+        {% if pending_count %}
+        <span class="badge bg-danger float-end">{{ pending_count }}</span>
+        {% endif %}
+    </a>
+    <a href="{{ url_for('admin.manage_users') }}" class="list-group-item list-group-item-action {% if request.endpoint == 'admin.manage_users' %}active{% endif %}">
+        <i class="fas fa-users me-2"></i> Gerenciar Usuários
+    </a>
+</div> 

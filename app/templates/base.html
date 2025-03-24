@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{% block title %}Reconquest Blog{% endblock %}</title>
+    <!-- Google Fonts - Montserrat -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- CSRF Token -->
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Critical CSS to ensure icons and badges appear immediately */
+        .fas, .fab, .far, .fa, .badge, [class*="fa-"] {
+            visibility: visible !important;
+            opacity: 1 !important;
+            display: inline-block !important;
+        }
+        
+        .premium-badge {
+            visibility: visible !important;
+            opacity: 1 !important;
+            display: block !important;
+        }
+    </style>
+    <!-- Custom style -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- The Reconquest Map CSS -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+    {% block extra_css %}{% endblock %}
+    <meta name="description" content="Reconquest Map Blog - Expert tips for getting your ex back">
+    <meta name="author" content="Joaquim Huelsen">
+    <meta name="keywords" content="relationship, ex back, breakup, reconciliation, reconquest map, love">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Reconquest Blog</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint == 'main.index' %}active{% endif %}" href="/">
+                            <i class="fas fa-home"></i> Home
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint == 'main.all_posts' %}active{% endif %}" href="#" id="postsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-newspaper"></i> Posts
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="postsDropdown">
+                            <li>
+                                <a class="dropdown-item" href="/posts?type=all">
+                                    <i class="fas fa-list"></i> All Posts
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/posts?type=free">
+                                    <i class="fas fa-unlock"></i> Free Posts
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="/posts?type=premium">
+                                    <i class="fas fa-crown"></i> Premium Posts
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint == 'main.teste_de_reconquista' %}active{% endif %}" href="/teste-de-reconquista">
+                            <i class="fas fa-clipboard-check"></i> Reconquest Test
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint == 'ai_chat.ia_relacionamento' %}active{% endif %}" href="{{ url_for('ai_chat.ia_relacionamento') }}">
+                            <i class="fas fa-robot"></i> Relationship AI
+                        </a>
+                    </li>
+                    
+                    {% if not current_user.is_authenticated or not current_user.is_premium %}
+                    <li class="nav-item">
+                        <a class="btn btn-premium px-3 mx-2" href="/premium">
+                            <i class="fas fa-crown"></i> Premium
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.is_admin %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and 'admin.' in request.endpoint %}active{% endif %}" href="{{ url_for('admin.dashboard') }}">
+                                <i class="fas fa-tachometer-alt"></i> Admin
+                            </a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user"></i>
+                                {% if current_user.is_premium %}
+                                <span class="badge bg-primary ms-1">Premium</span>
+                                {% endif %}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="/auth/profile">
+                                        <i class="fas fa-user-edit"></i> Edit Profile
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/auth/logout">
+                                        <i class="fas fa-sign-out-alt"></i> Logout
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and request.endpoint == 'auth.login' %}active{% endif %}" href="/auth/login">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint and request.endpoint == 'auth.register' %}active{% endif %}" href="/auth/register">
+                                <i class="fas fa-user-plus"></i> Register
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12 text-center">
+                    <h5>Reconquest Blog</h5>
+                    <p>The best content on male reconquest and relationships.</p>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div class="container">
+                <div class="row">
+                    <div class="col-12 text-center">
+                        <p class="mb-0">&copy; {{ now.year }} Reconquest Blog. All rights reserved.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html> 

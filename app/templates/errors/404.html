@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Página não encontrada - Reconquest Blog{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-danger text-white">
+                    <h1 class="h4 mb-0">Página não encontrada (Erro 404)</h1>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Desculpe, a página que você está procurando não existe.</p>
+                    
+                    <div class="alert alert-info">
+                        <h5>Informações de depuração:</h5>
+                        <p><strong>URL solicitada:</strong> {{ request.path }}</p>
+                        <p><strong>Método:</strong> {{ request.method }}</p>
+                        <p><strong>Endpoint:</strong> {{ request.endpoint or "Nenhum" }}</p>
+                        <p><strong>Blueprint:</strong> {{ request.blueprint or "Nenhum" }}</p>
+                        <p><strong>User Agent:</strong> {{ request.user_agent }}</p>
+                    </div>
+                    
+                    <p>Por favor, verifique o endereço ou use os links abaixo para navegar:</p>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center mt-4">
+                        <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                            <i class="fas fa-home"></i> Voltar à Página Inicial
+                        </a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar à Página Anterior
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

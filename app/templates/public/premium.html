@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Torne-se Premium - Blog Reconquista{% endblock %}
+
+{% block extra_css %}
+<style>
+    .premium-header {
+        background: linear-gradient(135deg, #ffd700, #ff9900);
+        padding: 4rem 0;
+        margin-bottom: 3rem;
+        color: #333;
+        text-align: center;
+    }
+    
+    .premium-badge {
+        display: inline-block;
+        background-color: #ffc107;
+        color: #000;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .price-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        transition: transform 0.3s, box-shadow 0.3s;
+        margin-bottom: 2rem;
+    }
+    
+    .price-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    }
+    
+    .price-card .card-header {
+        font-size: 1.5rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 1.5rem;
+        border-bottom: none;
+    }
+    
+    .price-card .price {
+        font-size: 3rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 1rem 0;
+        color: #333;
+    }
+    
+    .price-card .price small {
+        font-size: 1rem;
+        color: #777;
+    }
+    
+    .price-card .card-body {
+        padding: 2rem;
+    }
+    
+    .price-card .feature-list {
+        margin-bottom: 2rem;
+    }
+    
+    .price-card .feature-list li {
+        margin-bottom: 0.8rem;
+        position: relative;
+        padding-left: 1.5rem;
+    }
+    
+    .price-card .feature-list li:before {
+        content: "✓";
+        color: #28a745;
+        font-weight: bold;
+        position: absolute;
+        left: 0;
+    }
+    
+    .premium-features {
+        margin-top: 4rem;
+        margin-bottom: 4rem;
+    }
+    
+    .feature-icon {
+        font-size: 2.5rem;
+        color: #ffc107;
+        margin-bottom: 1rem;
+    }
+    
+    .testimonial {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .testimonial-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-bottom: 1rem;
+    }
+    
+    .ai-exclusive-alert {
+        background-color: #e7f5ff;
+        border-left: 5px solid #74c0fc;
+        padding: 15px 20px;
+        margin-bottom: 30px;
+        border-radius: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="premium-header">
+    <div class="container">
+        <h1 class="display-4">Conteúdo Premium Bloqueado</h1>
+        <p class="lead">Torne-se um membro premium para acessar este e outros conteúdos exclusivos.</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Mensagem para usuários autenticados -->
+    {% if current_user.is_authenticated and not current_user.is_premium %}
+    <div class="alert alert-info mb-5">
+        <h4 class="alert-heading">Olá, {{ current_user.username }}!</h4>
+        <p>Você já possui uma conta, mas precisa atualizar para o plano premium para ter acesso a este conteúdo.</p>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card price-card">
+                <div class="card-header bg-warning">Assinatura Premium</div>
+                <div class="price">R$ 29,90 <small>/mês</small></div>
+                <div class="card-body">
+                    <ul class="feature-list">
+                        <li>Acesso a todos os artigos premium</li>
+                        <li>Estratégias avançadas de reconquista</li>
+                        <li>Psicologia feminina aprofundada</li>
+                        <li>Dicas exclusivas de relacionamento</li>
+                        <li>Novos conteúdos premium toda semana</li>
+                        <li>Suporte personalizado</li>
+                        <li>Grupo VIP no Telegram</li>
+                        <li>Acesso à IA de relacionamentos</li>
+                    </ul>
+                    <a href="#" class="btn btn-warning btn-lg w-100">Assinar Agora</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="premium-features">
+        <h2 class="text-center mb-5">Por que se tornar Premium?</h2>
+        <div class="row text-center">
+            <div class="col-md-4">
+                <div class="feature-icon">
+                    <i class="fas fa-lock-open"></i>
+                </div>
+                <h3>Conteúdo Exclusivo</h3>
+                <p>Acesse artigos detalhados e técnicas que não compartilhamos publicamente.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-icon">
+                    <i class="fas fa-star"></i>
+                </div>
+                <h3>Prioridade Total</h3>
+                <p>Receba novos conteúdos antes de todos e tenha suporte prioritário.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <h3>Comunidade VIP</h3>
+                <p>Participe do nosso grupo exclusivo e conecte-se com outros membros.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+        <div class="col-md-8 offset-md-2">
+            <h2 class="text-center mb-4">O que nossos assinantes dizem</h2>
+            <div class="testimonial">
+                <div class="text-center">
+                    <img src="https://via.placeholder.com/150" class="testimonial-avatar" alt="Avatar">
+                    <h5>Carlos Silva</h5>
+                    <p class="text-muted mb-3">Assinante há 6 meses</p>
+                </div>
+                <p>"O conteúdo premium do Blog Reconquista mudou completamente minha forma de me relacionar. Consegui reconquistar minha ex-namorada usando as técnicas exclusivas que aprendi aqui."</p>
+            </div>
+            <div class="testimonial">
+                <div class="text-center">
+                    <img src="https://via.placeholder.com/150" class="testimonial-avatar" alt="Avatar">
+                    <h5>Rafael Mendes</h5>
+                    <p class="text-muted mb-3">Assinante há 1 ano</p>
+                </div>
+                <p>"Vale cada centavo! O conhecimento que adquiri me fez entender profundamente a psicologia feminina. Não tenho mais problemas para manter relacionamentos saudáveis e duradouros."</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mb-5">
+        <h3>Ainda tem dúvidas?</h3>
+        <p>Entre em contato conosco pelo e-mail <strong>premium@blogreconquista.com.br</strong> para mais informações.</p>
+        <a href="#" class="btn btn-warning btn-lg">Assinar Premium Agora</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+{% endblock %} 

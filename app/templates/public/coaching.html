@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Reconquest Test - Reconquest Blog{% endblock %}
+
+{% block extra_css %}
+<style>
+    .quiz-container {
+        max-width: 800px;
+        margin: 3rem auto;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+    }
+    
+    .quiz-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .quiz-header h1 {
+        color: #C60000;
+        margin-bottom: 1rem;
+    }
+    
+    .quiz-form label {
+        font-weight: 500;
+    }
+    
+    .quiz-form .btn-primary {
+        background-color: #C60000;
+        border-color: #C60000;
+    }
+    
+    .quiz-form .btn-primary:hover {
+        background-color: #a50000;
+        border-color: #a50000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="quiz-container">
+        <div class="quiz-header">
+            <h1>Reconquest Test</h1>
+            <p class="lead">Answer the questions below honestly to get a personalized analysis of your situation.</p>
+        </div>
+        
+        <form id="quiz-form" class="quiz-form">
+            <div class="mb-4">
+                <label for="fullName" class="form-label">Full Name</label>
+                <input type="text" class="form-control" id="fullName" name="fullName" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="age" class="form-label">Age</label>
+                <input type="number" class="form-control" id="age" name="age" min="18" max="100" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="exName" class="form-label">Ex's Name</label>
+                <input type="text" class="form-control" id="exName" name="exName" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="exAge" class="form-label">Ex's Age</label>
+                <input type="number" class="form-control" id="exAge" name="exAge" min="18" max="100" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="relationshipLength" class="form-label">How long were you together:</label>
+                <input type="text" class="form-control" id="relationshipLength" name="relationshipLength" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="timeSinceBreakup" class="form-label">How long have you been apart:</label>
+                <input type="text" class="form-control" id="timeSinceBreakup" name="timeSinceBreakup" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="breakupReason" class="form-label">Main reason for the breakup:</label>
+                <textarea class="form-control" id="breakupReason" name="breakupReason" rows="3" required></textarea>
+            </div>
+            
+            <div class="mb-4">
+                <label for="email" class="form-label">Contact email:</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+            
+            <div class="mb-4">
+                <label class="form-label">Are you a Reconquest Map student?</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="isStudent" id="isStudentYes" value="Yes" required>
+                    <label class="form-check-label" for="isStudentYes">
+                        Yes
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="isStudent" id="isStudentNo" value="No">
+                    <label class="form-check-label" for="isStudentNo">
+                        No
+                    </label>
+                </div>
+            </div>
+            
+            <div class="text-center mt-5">
+                <button type="submit" class="btn btn-lg btn-primary px-5">Submit Test</button>
+            </div>
+        </form>
+        
+        <div id="quiz-results" class="mt-5 p-4 bg-light rounded text-center" style="display: none;">
+            <!-- Content inserted via JavaScript -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const quizForm = document.getElementById('quiz-form');
+        const quizResults = document.getElementById('quiz-results');
+        
+        quizForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Check if all fields have been filled
+            const fullName = document.getElementById('fullName').value;
+            const age = document.getElementById('age').value;
+            const exName = document.getElementById('exName').value;
+            const exAge = document.getElementById('exAge').value;
+            const relationshipLength = document.getElementById('relationshipLength').value;
+            const timeSinceBreakup = document.getElementById('timeSinceBreakup').value;
+            const breakupReason = document.getElementById('breakupReason').value;
+            const email = document.getElementById('email').value;
+            const isStudent = document.querySelector('input[name="isStudent"]:checked');
+            
+            if (!fullName || !age || !exName || !exAge || !relationshipLength || 
+                !timeSinceBreakup || !breakupReason || !email || !isStudent) {
+                alert('Please fill in all fields of the form.');
+                return;
+            }
+            
+            // Prepare data for submission
+            const formData = {
+                fullName, 
+                age, 
+                exName, 
+                exAge, 
+                relationshipLength, 
+                timeSinceBreakup, 
+                breakupReason, 
+                email, 
+                isStudent: isStudent.value
+            };
+            
+            console.log("Sending data for analysis:", formData);
+            
+            // Show loading indicator
+            const submitButton = quizForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+            
+            // Send data to backend
+            fetch('{{ url_for("main.enviar_teste") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to send data');
+                }
+                return response.json().catch(() => ({}));
+            })
+            .then(data => {
+                console.log('Data received:', data);
+                
+                // Hide form and show confirmation message
+                quizForm.style.display = 'none';
+                
+                // Display confirmation message
+                quizResults.innerHTML = `
+                    <div class="text-center">
+                        <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                        <h3 class="my-4">Thank you for your submission!</h3>
+                        <div class="alert alert-success mb-4">
+                            <p>We have received your answers and will analyze them carefully.</p>
+                            <p class="mb-0">We will contact you through the email <strong>${email}</strong> with your personalized analysis.</p>
+                        </div>
+                        <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg mt-3">Return to homepage</a>
+                    </div>
+                `;
+                
+                quizResults.style.display = 'block';
+                
+                // Scroll to results
+                quizResults.scrollIntoView({behavior: 'smooth'});
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting the test. Please try again.');
+                
+                // Restore button
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            });
+        });
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} - Reconquest Blog{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Ensure icons and badges load immediately */
+    .fas, .fab, .far, .fa, .badge {
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: inline-block !important;
+    }
+    
+    .post-header {
+        position: relative;
+        width: 100%;
+        height: 400px;
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+    
+    .post-header img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .premium-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1;
+    }
+    
+    .premium-lock {
+        font-size: 5rem;
+        color: #ffc107;
+        animation: pulse 2s infinite;
+    }
+    
+    .premium-content-preview {
+        position: relative;
+        padding-bottom: 2rem;
+        overflow: hidden;
+    }
+    
+    .premium-content-blur {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 70%;
+        background: linear-gradient(transparent, #fff);
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        padding-bottom: 2rem;
+    }
+    
+    .premium-cta {
+        background-color: rgba(255, 193, 7, 0.9);
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        max-width: 80%;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.1);
+        }
+        100% {
+            transform: scale(1);
+        }
+    }
+    
+    .post-title {
+        text-align: center;
+        margin: 2rem 0;
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+    
+    .post-meta {
+        text-align: center;
+        margin-bottom: 2rem;
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .post-meta .social-icons {
+        margin-top: 0.5rem;
+    }
+    
+    .post-meta .social-icons a {
+        margin: 0 5px;
+        color: #3b5998;
+        font-size: 1.2rem;
+    }
+    
+    .post-content {
+        max-width: 800px;
+        margin: 0 auto;
+        line-height: 1.8;
+        font-size: 1.1rem;
+    }
+    
+    .post-content h2 {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        color: #343a40;
+    }
+    
+    .post-content h3 {
+        margin-top: 1.5rem;
+        font-weight: 600;
+        color: #343a40;
+    }
+    
+    .post-content p {
+        margin-bottom: 1.5rem;
+    }
+    
+    .post-content a {
+        color: #007bff;
+        text-decoration: underline;
+    }
+    
+    .post-content img {
+        max-width: 100%;
+        height: auto;
+        margin: 1.5rem 0;
+        border-radius: 4px;
+    }
+    
+    .premium-badge {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background-color: #ffc107;
+        color: #000;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        z-index: 2;
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: block !important;
+    }
+    
+    /* Recent Posts Styles */
+    .recent-posts {
+        margin-top: 5rem;
+        padding-top: 3rem;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .recent-posts h3 {
+        text-align: center;
+        margin-bottom: 2rem;
+        font-weight: 600;
+    }
+    
+    .recent-post-card {
+        height: 100%;
+        transition: transform 0.3s;
+    }
+    
+    .recent-post-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .recent-post-image {
+        height: 150px;
+        object-fit: cover;
+    }
+    
+    .recent-post-title {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .reading-time {
+        color: #6c757d;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        background-color: #f8f9fa;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+    }
+    
+    .reading-time i {
+        color: #ffc107;
+        margin-right: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<article>
+    <div class="post-header">
+        <img src="{{ post.image_url }}" alt="{{ post.title }}" onerror="this.onerror=null;this.src='https://via.placeholder.com/1200x400?text=Image+Unavailable';">
+        {% if post.premium_only %}
+            <div class="premium-badge">Premium Content</div>
+            {% if not current_user.is_authenticated or not current_user.is_premium %}
+            <div class="premium-overlay">
+                <i class="fas fa-lock premium-lock"></i>
+            </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    
+    <div class="container">
+        <div class="row">
+            <div class="col-md-10 offset-md-1">
+                <h1 class="post-title">{{ post.title }}</h1>
+                
+                <div class="post-meta mb-4">
+                    <span class="post-author"><i class="far fa-user"></i> {{ post.author.username }}</span>
+                    <span class="post-date"><i class="far fa-calendar-alt"></i> 
+                        {{ post.created_at.strftime('%m/%d/%Y') }} •
+                    </span>
+                    
+                    <!-- Reading Time -->
+                    <span class="post-reading-time"><i class="far fa-clock"></i> 
+                        {{ post.get_reading_time() }} min read
+                    </span>
+                </div>
+                
+                <div class="post-content">
+                    {% if post.premium_only and (not current_user.is_authenticated or not current_user.is_premium) %}
+                    <div class="premium-content-preview">
+                        {{ post.content[:500] | safe }}...
+                        <div class="premium-content-blur">
+                            <div class="premium-cta">
+                                <h3 class="mb-4"><i class="fas fa-crown"></i> Premium Content</h3>
+                                <p>This is exclusive content for premium subscribers.</p>
+                                <p>Upgrade now to access all premium articles, exclusive advice, and personalized support.</p>
+                                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-lg btn-primary mt-3">Upgrade to Premium</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    {{ post.content | safe }}
+                    {% endif %}
+                </div>
+                
+                <div class="mt-5 text-center">
+                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">← Back to blog</a>
+                </div>
+                
+                {% if post.premium_only and current_user.is_premium %}
+                    <div class="card mb-4 mt-5 bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">Premium Content</h5>
+                            <p>Thank you for being a premium subscriber! You have access to all exclusive content.</p>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <!-- Comments section -->
+                <section class="comments-section mt-5 pt-4 border-top">
+                    <h3 class="mb-4">Comments <span class="badge bg-secondary">{{ comments|length }}</span></h3>
+                    
+                    {% if current_user.is_authenticated %}
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <form id="comment-form" method="POST" action="{{ url_for('main.add_comment', post_id=post.id) }}">
+                                {{ form.hidden_tag() }}
+                                <div class="mb-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-user me-2"></i>
+                                        <strong>{{ current_user.username }}</strong>
+                                    </div>
+                                    {{ form.content.label(class="form-label") }}
+                                    {{ form.content(class="form-control", rows=3) }}
+                                    {% for error in form.content.errors %}
+                                        <span class="text-danger">{{ error }}</span>
+                                    {% endfor %}
+                                    {% if not current_user.is_admin %}
+                                    <small class="text-muted">Your comment will be reviewed before being published.</small>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    {{ form.submit(class="btn btn-primary", id="submit-comment") }}
+                                    <div id="comment-message" class="alert alert-success mt-2">
+                                        <!-- Message will be inserted by JavaScript -->
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mb-4">
+                        <p>To leave a comment, <a href="{{ url_for('auth.login', next=request.url) }}">log in</a> or <a href="{{ url_for('auth.register') }}">register</a>.</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if comments %}
+                        {% for comment in comments %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex mb-2">
+                                    <div class="me-3">
+                                        <i class="fas fa-user fa-2x"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="card-title mb-0">{{ comment.author.username }}</h5>
+                                        <p class="text-muted small">{{ comment.created_at.strftime('%m/%d/%Y at %H:%M') }}</p>
+                                    </div>
+                                </div>
+                                <p class="card-text">{{ comment.content }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-light text-center">
+                            <p>There are no comments yet. Be the first to comment!</p>
+                        </div>
+                    {% endif %}
+                </section>
+                
+                <!-- Personalized Coaching Section -->
+                <section class="coaching-section mt-5 pt-4 border-top">
+                    <div class="card mb-4">
+                        <div class="card-body text-center">
+                            <h3 class="card-title mb-3">Let's Find Out What Kind Of Chance You Have With Your Ex</h3>
+                            <p class="mb-4">Meu nome é Ethan Heyes e sou especialista em ajudar casais a se reunirem após términos. Faça meu teste para descobrir onde você está.</p>
+                            <div class="text-center">
+                                <a href="{{ url_for('main.teste_de_reconquista') }}" class="btn btn-lg btn-primary px-4 py-2">Faça seu teste</a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Recent Posts Section -->
+                {% if recent_posts %}
+                <section class="recent-posts">
+                    <h3>Latest Posts</h3>
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4">
+                        {% for recent in recent_posts %}
+                        <div class="col">
+                            <div class="card recent-post-card h-100">
+                                {% if recent.premium_only %}
+                                <div class="position-relative">
+                                    <img src="{{ recent.image_url }}" class="card-img-top recent-post-image" alt="{{ recent.title }}">
+                                    <div class="position-absolute" style="top: 10px; right: 10px;">
+                                        <span class="badge bg-warning text-dark">Premium</span>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <img src="{{ recent.image_url }}" class="card-img-top recent-post-image" alt="{{ recent.title }}">
+                                {% endif %}
+                                <div class="card-body">
+                                    <h5 class="recent-post-title">{{ recent.title }}</h5>
+                                    <p class="card-text small text-muted">
+                                        <small class="text-muted">
+                                            {{ recent.created_at.strftime('%m/%d/%Y') }}
+                                        </small>
+                                    </p>
+                                    <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary">Read post</a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</article>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js" integrity="sha512-Tn2m0TIpgVyTzzvmxLNuqbSJH3JP8jm+Cy3hvHrW7ndTDcJ1w5mBiksqDBb8GpE2ksktFvDB/ykZ0mDpsZj20w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+    // Ensure Font Awesome loads immediately
+    window.FontAwesomeConfig = {
+        autoReplaceSvg: 'nest',
+        observeMutations: false,
+        autoA11y: true
+    };
+    
+    // Force icon visibility
+    (function forceIconVisibility() {
+        document.querySelectorAll('.fas, .fab, .far, .fa, .premium-badge').forEach(function(el) {
+            el.style.display = el.tagName === 'SPAN' ? 'inline-block' : 'block';
+            el.style.visibility = 'visible';
+            el.style.opacity = '1';
+        });
+        
+        // Keep checking until fully loaded
+        if (document.readyState !== 'complete') {
+            setTimeout(forceIconVisibility, 100);
+        }
+    })();
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const commentForm = document.getElementById('comment-form');
+        const commentMessage = document.getElementById('comment-message');
+        
+        // Hide message initially
+        if (commentMessage) {
+            commentMessage.style.display = 'none';
+        }
+        
+        if (commentForm) {
+            commentForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(commentForm);
+                
+                fetch(commentForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Show success message
+                    commentMessage.textContent = data.message;
+                    commentMessage.className = 'alert alert-success mt-2';
+                    commentMessage.style.display = 'block';
+                    
+                    // Clear the form if the comment was successfully sent
+                    if (data.success) {
+                        commentForm.reset();
+                        // Message will remain visible
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    commentMessage.textContent = 'An error occurred while submitting your comment.';
+                    commentMessage.className = 'alert alert-danger mt-2';
+                    commentMessage.style.display = 'block';
+                });
+            });
+        }
+    });
+</script>
+{% endblock %} 

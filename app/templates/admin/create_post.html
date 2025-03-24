@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Novo Post - Blog Reconquista{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="m-0">Criar Novo Post</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.create_post') }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.title.label(class="form-label") }}
+                        {{ form.title(class="form-control") }}
+                        {% for error in form.title.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.summary.label(class="form-label") }}
+                        {{ form.summary(class="form-control", rows=3) }}
+                        <small class="form-text text-muted">Um breve resumo que aparecerá na página inicial.</small>
+                        {% for error in form.summary.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.image_url.label(class="form-label") }}
+                        {{ form.image_url(class="form-control") }}
+                        <small class="form-text text-muted">{{ form.image_url.description }}</small>
+                        {% for error in form.image_url.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.reading_time.label(class="form-label") }}
+                                {{ form.reading_time(class="form-control") }}
+                                <small class="form-text text-muted">{{ form.reading_time.description }}</small>
+                                {% for error in form.reading_time.errors %}
+                                    <span class="text-danger">{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.created_at.label(class="form-label") }}
+                                <input type="datetime-local" name="created_at" id="created_at" class="form-control">
+                                <small class="form-text text-muted">{{ form.created_at.description }}</small>
+                                {% for error in form.created_at.errors %}
+                                    <span class="text-danger">{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.content.label(class="form-label") }}
+                        {{ form.content(class="form-control", rows=15, id="content-editor") }}
+                        <small class="form-text text-muted">Você pode usar HTML básico para formatar o conteúdo.</small>
+                        {% for error in form.content.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.premium_only(class="form-check-input") }}
+                        {{ form.premium_only.label(class="form-check-label") }}
+                        <small class="form-text text-muted d-block">Marque esta opção se este conteúdo deve ser exclusivo para usuários premium.</small>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancelar</a>
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %} 

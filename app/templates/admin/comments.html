@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Comentários Pendentes - Blog Reconquista{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Menu Lateral -->
+        <div class="col-md-3">
+            {% include 'admin/_sidebar.html' %}
+        </div>
+        
+        <!-- Conteúdo Principal -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="m-0">Comentários Pendentes</h4>
+                </div>
+                <div class="card-body">
+                    {% if comments %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Post</th>
+                                    <th>Autor</th>
+                                    <th>Comentário</th>
+                                    <th>Data</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for comment in comments %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-user me-2"></i>
+                                                {{ comment.post.title }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-user me-2"></i>
+                                                {{ comment.author.username }}
+                                            </div>
+                                        </td>
+                                        <td>{{ comment.content[:50] + '...' if comment.content|length > 50 else comment.content }}</td>
+                                        <td>{{ comment.created_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                                        <td>
+                                            <div class="btn-group">
+                                                <form action="{{ url_for('admin.approve_comment', comment_id=comment.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-sm btn-success">
+                                                        <i class="fas fa-check"></i> Aprovar
+                                                    </button>
+                                                </form>
+                                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ comment.id }}">
+                                                    <i class="fas fa-trash"></i> Excluir
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- Modal de Confirmação de Exclusão -->
+                                            <div class="modal fade" id="deleteModal{{ comment.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ comment.id }}" aria-hidden="true">
+                                                <div class="modal-dialog">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title" id="deleteModalLabel{{ comment.id }}">Confirmar Exclusão</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p>Você tem certeza que deseja excluir este comentário?</p>
+                                                            <p class="text-muted">{{ comment.content }}</p>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                            <form action="{{ url_for('admin.delete_comment', comment_id=comment.id) }}" method="POST">
+                                                                <button type="submit" class="btn btn-danger">Excluir Permanentemente</button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        Não há comentários pendentes no momento.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %} 
