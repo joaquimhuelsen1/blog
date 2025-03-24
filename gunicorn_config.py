@@ -1,20 +1,18 @@
 import multiprocessing
 
-# Configurações de ligação do Gunicorn
+# Configuração extremamente simples para o Gunicorn
 bind = "0.0.0.0:80"
-workers = 2  # Número fixo e simples de workers
+workers = 1  # Apenas um worker para evitar problemas
+timeout = 180  # 3 minutos de timeout
 
-# Configurações de logging para depuração
-accesslog = "-"  # Ativa o log de acesso no stdout
-errorlog = "-"   # Envia erros para stderr
-loglevel = "info"  # Mais detalhado para depuração
+# Logging completo para melhor diagnóstico
+accesslog = "-"  
+errorlog = "-"   
+loglevel = "debug"  # Log de nível debug para diagnosticar problemas
 
-# Timeout
-timeout = 300  # Aumentado para 5 minutos
+# Evite preload para prevenir erros de inicialização
+preload_app = False
 
-# Configurações simplificadas
-worker_class = "sync"
-preload_app = False  # Desativando preload para simplicidade
-
-# Outras configurações
-graceful_timeout = 60  # Timeout para shutdown suave 
+# Configurações adicionais para ajudar no timeout
+keepalive = 65
+worker_class = "sync" 

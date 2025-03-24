@@ -3,23 +3,11 @@ WSGI entry point for Gunicorn
 """
 from app import create_app
 
-# Create the Flask application
+# Criar a aplicação sem complexidades adicionais
 application = create_app()
 
-# Configure application for working behind a proxy
-application.config['PREFERRED_URL_SCHEME'] = 'https'
-application.config['PROXY_FIX_X_FOR'] = 1
-application.config['PROXY_FIX_X_PROTO'] = 1
-application.config['PROXY_FIX_X_HOST'] = 1
-application.config['PROXY_FIX_X_PORT'] = 1
-application.config['PROXY_FIX_X_PREFIX'] = 1
+# Configuração direta e simples para resolver problemas de proxy
+application.config['SERVER_NAME'] = None  # Deixe o Flask detectar automaticamente
 
-# Adicionar suporte a proxy
-from werkzeug.middleware.proxy_fix import ProxyFix
-application.wsgi_app = ProxyFix(
-    application.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
-)
-
-# For local development
-if __name__ == '__main__':
-    application.run()
+if __name__ == "__main__":
+    application.run(host='0.0.0.0', port=80)
