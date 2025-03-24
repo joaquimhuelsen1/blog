@@ -3,11 +3,18 @@ WSGI entry point for Gunicorn
 """
 from app import create_app
 
-# Criar a aplicação sem complexidades adicionais
+# Criar a instância da aplicação
 application = create_app()
 
-# Configuração direta e simples para resolver problemas de proxy
-application.config['SERVER_NAME'] = None  # Deixe o Flask detectar automaticamente
+# Configuração otimizada para funcionar com o proxy do Easypanel
+# Evita redirecionamentos HTTPS incorretos
+application.config['PREFERRED_URL_SCHEME'] = 'http'
+
+# Configuração mínima de proxy fix que funciona com Traefik
+from werkzeug.middleware.proxy_fix import ProxyFix
+application.wsgi_app = ProxyFix(
+    application.wsgi_app, x_for=1, x_proto=1
+)
 
 if __name__ == "__main__":
     application.run(host='0.0.0.0', port=80)

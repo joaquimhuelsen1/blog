@@ -2,8 +2,10 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Instalando ferramentas de depuração
-RUN apt-get update && apt-get install -y curl procps && apt-get clean
+# Instalar apenas dependências essenciais
+RUN apt-get update && apt-get install -y curl --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -21,8 +23,8 @@ EXPOSE 80
 # Remova o protocolo HTTPS da configuração do Flask
 ENV PREFERRED_URL_SCHEME=http
 
-# Healthcheck para verificar se a aplicação está respondendo
-HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+# Healthcheck otimizado
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:80/ || exit 1
 
 CMD ["gunicorn", "--config", "gunicorn_config.py", "wsgi:application"] 
