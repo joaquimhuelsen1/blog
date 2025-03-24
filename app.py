@@ -40,7 +40,7 @@ if __name__ == '__main__':
     try:
         # Ponto de entrada principal da aplicação
         print("Iniciando servidor...")
-        app.run(debug=True, use_reloader=False, port=8000)
+        app.run(host='0.0.0.0', debug=False, use_reloader=False, port=8000)
     finally:
         # Garantir que o contexto seja liberado quando o servidor for encerrado
         if 'ctx' in locals():
