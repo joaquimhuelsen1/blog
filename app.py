@@ -54,6 +54,11 @@ def server_info():
     }
     return jsonify(info)
 
+@app.route('/')
+def root():
+    """Rota raiz simples para healthcheck"""
+    return "ok"
+
 if __name__ == '__main__':
     try:
         # Ponto de entrada principal da aplicação
