@@ -269,4 +269,12 @@ def delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
     flash(f'User {user.username} has been deleted successfully.', 'success')
-    return redirect(url_for('admin.manage_users')) 
+    return redirect(url_for('admin.manage_users'))
+
+# Rota alternativa para compatibilidade com o template
+@admin_bp.route('/user/delete/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def delete_user_alt(user_id):
+    # Apenas redirecionar para a rota principal
+    return delete_user(user_id) 
