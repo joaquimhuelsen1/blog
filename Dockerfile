@@ -17,14 +17,14 @@ ENV FLASK_ENV=production
 # Definindo variáveis para comportamento previsível
 ENV PYTHONUNBUFFERED=1
 
-# Expondo a porta 80 do container
-EXPOSE 80
+# Expondo a porta 8000 do container
+EXPOSE 8000
 
 # Remova o protocolo HTTPS da configuração do Flask
 ENV PREFERRED_URL_SCHEME=http
 
 # Healthcheck otimizado
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:80/ || exit 1
+  CMD curl -f http://localhost:8000/ || exit 1
 
 CMD ["gunicorn", "--config", "gunicorn_config.py", "wsgi:application"] 

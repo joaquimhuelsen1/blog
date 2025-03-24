@@ -1,7 +1,7 @@
 import multiprocessing
 
 # Configuração otimizada para produção
-bind = "0.0.0.0:80"
+bind = "0.0.0.0:8000"
 
 # Número de workers baseado em CPUs disponíveis (N+1)
 workers = multiprocessing.cpu_count() + 1
