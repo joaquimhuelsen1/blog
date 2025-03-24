@@ -1,7 +1,7 @@
 import multiprocessing
 
 # Configurações de ligação do Gunicorn
-bind = "0.0.0.0:8000"
+bind = "0.0.0.0:80"
 workers = multiprocessing.cpu_count() * 2 + 1
 
 # Configurações de logging para reduzir verbosidade
