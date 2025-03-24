@@ -1,7 +1,7 @@
 import os
 import sys
 from app import create_app, db
-from flask import render_template, current_app
+from flask import render_template, current_app, request, jsonify
 
 # Criação da aplicação principal
 app = create_app()
@@ -35,6 +35,24 @@ def test_db():
         return f"Conexão com o banco de dados OK. Driver: {db.engine.url.drivername}. Total de usuários: {users_count}"
     except Exception as e:
         return f"Erro ao conectar ao banco de dados: {str(e)}", 500
+
+@app.route('/info')
+def server_info():
+    """Rota de diagnóstico que exibe informações sobre o servidor e a requisição."""
+    info = {
+        'headers': dict(request.headers),
+        'environ': dict(request.environ),
+        'host': request.host,
+        'url': request.url,
+        'path': request.path,
+        'remote_addr': request.remote_addr,
+        'server_software': os.environ.get('SERVER_SOFTWARE', 'desconhecido'),
+        'wsgi_env': {
+            k: v for k, v in request.environ.items() 
+            if k.startswith('wsgi.') or k.startswith('HTTP_')
+        }
+    }
+    return jsonify(info)
 
 if __name__ == '__main__':
     try:
