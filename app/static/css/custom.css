@@ -824,4 +824,23 @@ footer .social-links a {
     30% {
         transform: translateY(-5px);
     }
+}
+
+/* Paginação - Sobrescrevendo a cor azul do Bootstrap */
+.pagination .page-item.active .page-link {
+    background-color: #C60000 !important;
+    border-color: #C60000 !important;
+    color: white !important;
+}
+
+.pagination .page-link {
+    color: #000000 !important;
+}
+
+.pagination .page-link:hover,
+.pagination .page-link:focus {
+    color: #C60000 !important;
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    box-shadow: 0 0 0 0.2rem rgba(198, 0, 0, 0.15);
 } 

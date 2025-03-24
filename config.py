@@ -69,7 +69,7 @@ class Config:
         SUPABASE_DB_USER = os.environ.get('SUPABASE_DB_USER')
         SUPABASE_DB_PASSWORD = os.environ.get('SUPABASE_DB_PASSWORD')
         SUPABASE_DB_HOST = os.environ.get('SUPABASE_DB_HOST', 'aws-0-us-west-1.pooler.supabase.com')
-        SUPABASE_DB_PORT = os.environ.get('SUPABASE_DB_PORT', '5432')
+        SUPABASE_DB_PORT = os.environ.get('SUPABASE_DB_PORT', '6543')  # Porta do pooler é 6543
         SUPABASE_DB_NAME = os.environ.get('SUPABASE_DB_NAME')
         
         # Forçar o host correto independentemente do que estiver configurado
@@ -84,12 +84,13 @@ class Config:
         
         if POSTGRES_CONFIGURED:
             # Formar a URL de conexão com o PostgreSQL com parâmetros mínimos
-            SQLALCHEMY_DATABASE_URI = f'postgresql://{SUPABASE_DB_USER}:{SUPABASE_DB_PASSWORD}@{SUPABASE_DB_HOST}:6543/{SUPABASE_DB_NAME}?sslmode=prefer'
+            SQLALCHEMY_DATABASE_URI = f'postgresql://{SUPABASE_DB_USER}:{SUPABASE_DB_PASSWORD}@{SUPABASE_DB_HOST}:{SUPABASE_DB_PORT}/{SUPABASE_DB_NAME}?sslmode=prefer'
             print(f"Usando conexão PostgreSQL via variáveis separadas: {SQLALCHEMY_DATABASE_URI.split('@')[0]}@****")
         else:
-            # Fallback para SQLite
-            print("AVISO: Usando SQLite como fallback. Configure DATABASE_URL para usar PostgreSQL.")
-            SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(INSTANCE_PATH, 'blog.db')
+            # Gerar erro se as credenciais do Supabase não estiverem configuradas
+            error_msg = "ERRO: Credenciais do Supabase não configuradas. Configure DATABASE_URL ou as variáveis SUPABASE_DB_*"
+            print(error_msg)
+            raise ValueError(error_msg)
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
