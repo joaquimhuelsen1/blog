@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>{% block title %}Reconquest Blog{% endblock %}</title>
+    <title>{% block title %}Relationship Blog{% endblock %}</title>
     <!-- Google Fonts - Montserrat -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,21 +26,37 @@
             opacity: 1 !important;
             display: block !important;
         }
+
+        /* Estilo para a logo*/
+        .navbar-brand img {
+            height: 80px;
+            width: auto;
+            max-width: 100%;
+            object-fit: contain;
+            padding: 10px 0;
+        }
+
+        /* Ajuste da navbar para comportar a logo maior */
+        .navbar {
+            padding: 0.5rem 1rem;
+        }
     </style>
     <!-- Custom style -->
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=2">
     <!-- The Reconquest Map CSS -->
-    <link rel="stylesheet" href="/static/css/custom.css">
+    <link rel="stylesheet" href="/static/css/custom.css?v=2">
     {% block extra_css %}{% endblock %}
-    <meta name="description" content="Reconquest Map Blog - Expert tips for getting your ex back">
+    <meta name="description" content="Relationship Blog - Expert tips for getting your ex back">
     <meta name="author" content="Joaquim Huelsen">
-    <meta name="keywords" content="relationship, ex back, breakup, reconciliation, reconquest map, love">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <meta name="keywords" content="relationship, ex back, breakup, reconciliation, relationship map, love">
+    <link rel="icon" href="https://reconquestyourex.com/wp-content/uploads/2025/03/fivicon2.png" type="image/png">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">Reconquest Blog</a>
+            <a class="navbar-brand" href="/">
+                <img src="https://reconquestyourex.com/wp-content/uploads/2025/03/Ethan-Heyes-1550-x-470-px-1.png" alt="Relationship Blog Logo">
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -156,8 +172,8 @@
         <div class="container">
             <div class="row">
                 <div class="col-md-12 text-center">
-                    <h5>Reconquest Blog</h5>
-                    <p>The best content on male reconquest and relationships.</p>
+                    <h5>Relationship Blog</h5>
+                    <p>The best content on male relationships.</p>
                 </div>
             </div>
         </div>
@@ -165,7 +181,7 @@
             <div class="container">
                 <div class="row">
                     <div class="col-12 text-center">
-                        <p class="mb-0">&copy; {{ now.year }} Reconquest Blog. All rights reserved.</p>
+                        <p class="mb-0">&copy; {{ now.year }} Relationship Blog. All rights reserved.</p>
                     </div>
                 </div>
             </div>

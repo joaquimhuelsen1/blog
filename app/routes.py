@@ -8,6 +8,8 @@ from functools import wraps
 import os
 import requests
 import json
+import markdown
+from markdown.extensions import fenced_code, tables, nl2br
 
 # Blueprints
 main_bp = Blueprint('main', __name__)
@@ -59,70 +61,18 @@ def index():
     
     return render_template('public/index.html', posts=posts)
 
-@main_bp.route('/post/<int:post_id>', methods=['GET', 'POST'])
+@main_bp.route('/post/<int:post_id>')
 def post(post_id):
     post = Post.query.get_or_404(post_id)
     
-    # Verificar se é o post 4 e usar a URL específica
-    if post.id == 4:
-        post.image_url = "https://img.freepik.com/free-photo/side-view-couple-holding-each-other_23-2148735555.jpg?t=st=1742409398~exp=1742412998~hmac=59e342a62de1c61aedc5a53c00356ab4406ded130e98eca884480d2d68360910&w=900"
-        db.session.commit()
-    # Verificar se a imagem do post existe, caso contrário, usar placeholder
-    elif not post.image_url or not post.image_url.strip() or (not post.image_url.startswith(('http://', 'https://')) and post.image_url.startswith('/static/')):
-        # Tentar garantir que mesmo URLs locais funcionem
-        static_path = os.path.join('app', post.image_url[1:] if post.image_url.startswith('/') else '')
-        if not os.path.exists(static_path):
-            post.image_url = 'https://via.placeholder.com/1200x400?text=Post+' + str(post.id)
+    # Buscar posts recentes (excluindo o atual)
+    recent_posts = Post.query.filter(Post.id != post_id).order_by(Post.created_at.desc()).limit(3).all()
     
-    # Verificar se o post é premium e se o usuário NÃO tem acesso premium
-    # O aviso será mostrado na página, mas não redirecionamos e permitimos que o template
-    # decida como exibir o conteúdo (uma prévia ou o conteúdo completo)
-    can_access_premium = current_user.is_authenticated and (current_user.is_premium or current_user.is_admin)
+    # Buscar comentários aprovados
+    comments = post.comments.filter_by(approved=True).order_by(Comment.created_at.desc()).all()
     
-    if post.premium_only and not can_access_premium:
-        flash('This content is exclusive for premium users.', 'info')
-        # Não redirecionar, permitir a visualização da prévia
-    
-    # Obter os últimos 4 posts (diferentes do atual) para exibir no final da página
-    recent_posts = Post.query.filter(
-        Post.id != post_id
-    ).order_by(Post.created_at.desc()).limit(4).all()
-    
-    # Inicializar formulário de comentário
+    # Formulário para novos comentários
     form = CommentForm()
-    
-    # Processar envio de comentário
-    if form.validate_on_submit():
-        if current_user.is_authenticated:
-            comment = Comment(
-                content=form.content.data,
-                author=current_user,
-                post=post,
-                approved=current_user.is_admin  # Aprovação automática para admins
-            )
-            db.session.add(comment)
-            db.session.commit()
-            
-            # Verifica se é uma requisição AJAX
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({'success': True, 'message': 'Your comment has been submitted'})
-            
-            # Método tradicional com redirecionamento (fallback)
-            if current_user.is_admin:
-                flash('Your comment has been published.', 'success')
-            else:
-                flash('Your comment has been submitted.', 'info')
-            return redirect(url_for('main.post', post_id=post.id))
-        else:
-            # Verifica se é uma requisição AJAX
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({'success': False, 'message': 'You need to log in to comment.'})
-            
-            flash('You need to log in to comment.', 'warning')
-            return redirect(url_for('auth.login', next=request.url))
-    
-    # Obter comentários aprovados para o post
-    comments = Comment.query.filter_by(post_id=post.id, approved=True).order_by(Comment.created_at.desc()).all()
     
     return render_template('public/post.html', post=post, recent_posts=recent_posts, form=form, comments=comments)
 

@@ -20,7 +20,16 @@ a:hover {
     text-decoration: underline;
 }
 
-/* Cabeçalho e Navegação */
+/* Estilo para a logo - v2 */
+.navbar-brand img {
+    height: 60px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    object-fit: contain !important;
+    padding: 5px 0 !important;
+}
+
+/* Ajuste da navbar para comportar a logo maior - v2 */
 .navbar {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     padding: 0.8rem 1rem;
@@ -62,7 +71,7 @@ a:hover {
 }
 
 .card-img-top {
-    height: 200px;
+    height: 300px !important;
     object-fit: cover;
 }
 
@@ -151,7 +160,7 @@ footer a:hover {
     }
     
     .card-img-top {
-        height: 150px;
+        height: 200px !important;
     }
 }
 
@@ -223,6 +232,15 @@ article a:hover {
     --secondary-color: #000000;
     --white-color: #FFFFFF;
     --light-gray: #F1F1F1;
+}
+
+/* Título principal da página inicial - v2 */
+.welcome-title {
+    font-size: 3.5rem !important;
+    font-weight: 600 !important;
+    color: var(--primary-color) !important;
+    margin-bottom: 1.5rem !important;
+    line-height: 1.2 !important;
 }
 
 /* Garantir que o comentário seja exibido corretamente */
@@ -441,6 +459,7 @@ h1, .post-title {
     margin-bottom: 8px;
     font-weight: 600;
     line-height: 1.25;
+    color: #d60c0c;
 }
 
 .markdown-content h1 {

@@ -54,6 +54,17 @@ class User(UserMixin, db.Model):
         print(f"[DEBUG] Sem créditos disponíveis para {self.username}")
         return False  # Sem créditos disponíveis
 
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    approved = db.Column(db.Boolean, default=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Comment {self.id} by {self.author.username}>'
+
 class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100))
@@ -92,17 +103,6 @@ class Post(db.Model):
         reading_time_minutes = max(1, round(word_count / 225))
         
         return reading_time_minutes
-
-class Comment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    approved = db.Column(db.Boolean, default=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
-
-    def __repr__(self):
-        return f'<Comment {self.id} by {self.author.username}>'
 
 @login_manager.user_loader
 def load_user(id):

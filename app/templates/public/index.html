@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Reconquest Blog - Home Page{% endblock %}
+{% block title %}Relationship Blog - Home Page{% endblock %}
 
 {% block content %}
 <div class="jumbotron bg-light p-5 rounded mb-4">
-    <h1 class="display-4">Welcome to Reconquest Blog</h1>
-    <p class="lead">Specialized content on male reconquest and relationships.</p>
+    <h1 class="welcome-title">Welcome to Relationship Blog</h1>
+    <p class="lead">Specialized content on male relationships.</p>
     <hr class="my-4">
     <p>Learn the best strategies to improve your relationships and win the woman of your dreams.</p>
     {% if not current_user.is_authenticated %}
@@ -16,6 +16,42 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+    .welcome-title {
+        color: var(--primary-color);
+        font-size: 3.5rem;
+        font-weight: 900;
+        margin-bottom: 1.5rem;
+        line-height: 1.2;
+    }
+
+    @media (max-width: 768px) {
+        .welcome-title {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .jumbotron {
+            padding: 2rem !important;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .welcome-title {
+            font-size: 2rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .jumbotron {
+            padding: 1.5rem !important;
+        }
+        
+        .lead {
+            font-size: 1.1rem;
+        }
+    }
+</style>
 
 <!-- Personalized Coaching Banner -->
 <div class="card mb-4 coaching-banner">

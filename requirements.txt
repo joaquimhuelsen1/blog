@@ -4,7 +4,8 @@ flask-sqlalchemy==2.5.1
 flask-wtf==1.0.1
 flask-migrate==3.1.0
 flask-session==0.4.0
-psycopg2-binary==2.9.5
+flask-mail==0.9.1
+psycopg2-binary==2.9.9
 python-dotenv==0.20.0
 Jinja2==3.0.3
 itsdangerous==2.0.1

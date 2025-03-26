@@ -15,6 +15,7 @@ import logging
 from sqlalchemy import text
 import re
 import socket
+from flask_mail import Mail
 
 # Configurar logging
 logging.basicConfig(
@@ -30,7 +31,8 @@ logger = logging.getLogger('blog_app_init')
 # Inicializar objetos
 db = SQLAlchemy()
 login_manager = LoginManager()
-csrf = CSRFProtect()  # Inicializar CSRF no nível do módulo
+# csrf = CSRFProtect()  # Inicializar CSRF no nível do módulo
+mail = Mail()
 
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
@@ -144,6 +146,11 @@ def create_app():
     
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # Registrar o filtro markdown_to_html
+    from app.utils import markdown_to_html
+    app.jinja_env.filters['markdown'] = markdown_to_html
+    logger.info("Filtro markdown registrado")
     
     # Verificar e corrigir URL para conectividade com Supabase
     if 'SQLALCHEMY_DATABASE_URI' in app.config and app.config['SQLALCHEMY_DATABASE_URI']:
@@ -268,8 +275,8 @@ def create_app():
         setup_db_event_listeners(db)
     
     # Inicializar CSRF protection antes de qualquer blueprint
-    csrf.init_app(app)
-    logger.info("CSRF protection inicializado")
+    # csrf.init_app(app)
+    # logger.info("CSRF protection inicializado")
     
     # Tentar conectar ao banco de dados
     try:
@@ -340,6 +347,8 @@ def create_app():
     if sess is not None:
         sess.init_app(app)
         logger.info("Flask-Session inicializado")
+    mail.init_app(app)
+    logger.info("Flask-Mail inicializado")
     
     # Configurar login manager
     login_manager.login_view = 'auth.login'
