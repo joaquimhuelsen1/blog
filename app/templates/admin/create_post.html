@@ -14,7 +14,7 @@
                 <h4 class="m-0">Criar Novo Post</h4>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('admin.create_post') }}">
+                <form method="POST" action="{{ url_for('admin.create_post') }}" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
@@ -35,9 +35,18 @@
                     </div>
                     
                     <div class="mb-3">
+                        {{ form.image.label(class="form-label") }}
+                        {{ form.image(class="form-control") }}
+                        <small class="form-text text-muted">Upload uma imagem para o post. Formatos aceitos: jpg, jpeg, png, gif</small>
+                        {% for error in form.image.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
                         {{ form.image_url.label(class="form-label") }}
                         {{ form.image_url(class="form-control") }}
-                        <small class="form-text text-muted">{{ form.image_url.description }}</small>
+                        <small class="form-text text-muted">Ou insira uma URL de imagem externa. Se nenhuma imagem for fornecida, será usado um placeholder.</small>
                         {% for error in form.image_url.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}

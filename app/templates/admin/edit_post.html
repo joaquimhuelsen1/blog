@@ -14,7 +14,7 @@
                 <h4 class="m-0">Editar Post</h4>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('admin.edit_post', post_id=post.id) }}">
+                <form method="POST" action="{{ url_for('admin.edit_post', post_id=post.id) }}" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
@@ -35,13 +35,18 @@
                     </div>
                     
                     <div class="mb-3">
+                        {{ form.image.label(class="form-label") }}
+                        {{ form.image(class="form-control") }}
+                        <small class="form-text text-muted">Upload uma nova imagem para o post. Formatos aceitos: jpg, jpeg, png, gif</small>
+                        {% for error in form.image.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
                         {{ form.image_url.label(class="form-label") }}
                         {{ form.image_url(class="form-control") }}
-                        <small class="form-text text-muted">{{ form.image_url.description }}</small>
-                        <div class="mt-2">
-                            <img src="{{ post.image_url }}" class="img-thumbnail" style="max-height: 150px;" alt="Imagem atual" onerror="this.onerror=null;this.src='https://via.placeholder.com/1200x400?text=Imagem+Indisponível';">
-                            <small class="form-text text-muted d-block mt-1">Imagem atual</small>
-                        </div>
+                        <small class="form-text text-muted">Ou insira uma URL de imagem externa. Se nenhuma imagem for fornecida, será mantida a imagem atual.</small>
                         {% for error in form.image_url.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}

@@ -7,7 +7,7 @@ load_dotenv()
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# Variável global para armazenar a URL direta de conexão
+# Variável global para armazenar a URL direta de conexãos
 SUPABASE_DIRECT_URL = None
 
 class Config:
@@ -101,11 +101,12 @@ class Config:
     
     # Configurações de Email (para implementação futura)
     MAIL_SERVER = os.environ.get('MAIL_SERVER')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 25)
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS') is not None
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    ADMINS = ['seu-email@exemplo.com']
+    ADMINS = [os.environ.get('MAIL_USERNAME', 'ethanheyes@reconquestyourex.com')]
     
     # Configurações de Debug
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'

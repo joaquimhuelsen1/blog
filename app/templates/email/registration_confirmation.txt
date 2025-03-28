@@ -1,0 +1,21 @@
+Welcome to Reconquest Blog!
+
+Dear {{ user.username }},
+
+Thank you for registering with Reconquest Blog! We're excited to have you as part of our community.
+
+Your account has been successfully created with the following details:
+- Username: {{ user.username }}
+- Email: {{ user.email }}
+
+You can now log in to your account and start exploring our content.
+
+To log in to your account, visit: {{ url_for('auth.login', _external=True) }}
+
+If you have any questions or need assistance, please don't hesitate to contact us.
+
+Best regards,
+The Reconquest Blog Team
+
+---
+This is an automated message, please do not reply to this email. 

@@ -31,11 +31,11 @@
                     
                     <div class="mb-3">
                         {{ form.age.label(class="form-label") }}
-                        {{ form.age(class="form-control") }}
+                        {{ form.age(class="form-control", type="number", min="18", max="120") }}
                         {% for error in form.age.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}
-                        <small class="form-text text-muted">Optional. You can leave this field blank.</small>
+                        <small class="form-text text-muted">{{ form.age.description }}</small>
                     </div>
                     
                     <div class="mb-3">

@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, URLField, IntegerField, DateTimeField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, IntegerField, DateTimeField, FileField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, URL, Optional, NumberRange
 from app.models import User
 from datetime import datetime
@@ -23,7 +23,6 @@ class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
-    age = IntegerField('Age', validators=[DataRequired(), NumberRange(min=18, max=99)])
     terms = BooleanField('I agree to the terms of service', validators=[DataRequired()])
     submit = SubmitField('Register')
     
@@ -75,11 +74,18 @@ class PostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=100)])
     summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=200)])
     content = TextAreaField('Content', validators=[DataRequired()])
+    image = FileField('Image', validators=[Optional()])
     image_url = StringField('Image URL', validators=[Optional(), URL()], description="Enter a URL for the post's cover image. If left empty, a placeholder will be used.")
     reading_time = IntegerField('Reading Time (minutes)', validators=[Optional(), NumberRange(min=1, max=60)], description="Estimated reading time in minutes. Leave empty for automatic calculation.")
     created_at = DateTimeField('Publication Date', format='%Y-%m-%dT%H:%M', validators=[Optional()], default=datetime.utcnow, description="Publication date and time. Leave empty to use current date.")
     premium_only = BooleanField('Premium Only', default=False, description="If checked, only premium users will be able to access this post.")
     submit = SubmitField('Save Post')
+
+    def validate_image(self, field):
+        if field.data:
+            filename = field.data.filename.lower()
+            if not filename.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                raise ValidationError('Only image files (jpg, jpeg, png, gif) are allowed.')
 
 class UserUpdateForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
@@ -95,17 +101,17 @@ class ProfileUpdateForm(FlaskForm):
     age = IntegerField('Age', validators=[Optional(), NumberRange(min=18, max=120)], description="Optional. You can leave this field blank.")
     submit = SubmitField('Update Profile')
     
-    def __init__(self, original_username='', original_email='', *args, **kwargs):
+    def __init__(self, original_username=None, original_email=None, *args, **kwargs):
         super(ProfileUpdateForm, self).__init__(*args, **kwargs)
         self.original_username = original_username
         self.original_email = original_email
-        
+    
     def validate_username(self, username):
         if username.data != self.original_username:
             user = User.query.filter_by(username=username.data).first()
             if user:
                 raise ValidationError('This username is already taken. Please choose a different one.')
-                
+    
     def validate_email(self, email):
         if email.data != self.original_email:
             user = User.query.filter_by(email=email.data).first()

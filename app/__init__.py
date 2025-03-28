@@ -152,6 +152,30 @@ def create_app():
     app.jinja_env.filters['markdown'] = markdown_to_html
     logger.info("Filtro markdown registrado")
     
+    # Inicializar Flask-Mail
+    logger.info("Inicializando Flask-Mail...")
+    logger.info(f"MAIL_SERVER: {app.config['MAIL_SERVER']}")
+    logger.info(f"MAIL_PORT: {app.config['MAIL_PORT']}")
+    logger.info(f"MAIL_USE_SSL: {app.config['MAIL_USE_SSL']}")
+    logger.info(f"MAIL_USE_TLS: {app.config['MAIL_USE_TLS']}")
+    logger.info(f"MAIL_USERNAME: {app.config['MAIL_USERNAME']}")
+    logger.info(f"ADMINS: {app.config['ADMINS']}")
+    
+    # Configurar Flask-Mail com SSL
+    app.config['MAIL_USE_SSL'] = True
+    app.config['MAIL_USE_TLS'] = False
+    
+    mail.init_app(app)
+    logger.info("Flask-Mail inicializado com sucesso")
+    
+    # Configurar logger específico para email
+    email_logger = logging.getLogger('email_debug')
+    email_logger.setLevel(logging.DEBUG)
+    email_handler = logging.FileHandler('email_debug.log')
+    email_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+    email_logger.addHandler(email_handler)
+    logger.info("Logger de email configurado")
+    
     # Verificar e corrigir URL para conectividade com Supabase
     if 'SQLALCHEMY_DATABASE_URI' in app.config and app.config['SQLALCHEMY_DATABASE_URI']:
         db_uri = app.config['SQLALCHEMY_DATABASE_URI']
@@ -347,8 +371,6 @@ def create_app():
     if sess is not None:
         sess.init_app(app)
         logger.info("Flask-Session inicializado")
-    mail.init_app(app)
-    logger.info("Flask-Mail inicializado")
     
     # Configurar login manager
     login_manager.login_view = 'auth.login'
@@ -413,42 +435,37 @@ def create_app():
     
     # Registrar blueprints - Verificar se o módulo ou o pacote existe
     try:
-        # Tentar importar do pacote app.routes (pasta)
-        from app.routes.main import main_bp
-        from app.routes.auth import auth_bp
-        from app.routes.admin import admin_bp
-        from app.routes.user import user_bp
-        from app.routes.temporary import temp_bp  # Import the temporary blueprint
-        from app.routes.ai_chat import ai_chat_bp  # Import the AI chat blueprint
+        # Primeiro tentar importar do arquivo app/routes.py
+        from app.routes import main_bp, auth_bp, admin_bp, user_bp, temp_bp, ai_chat_bp
         
         # Register blueprints
         app.register_blueprint(main_bp)
         app.register_blueprint(auth_bp, url_prefix='/auth')
         app.register_blueprint(admin_bp, url_prefix='/admin')
         app.register_blueprint(user_bp, url_prefix='/user')
-        app.register_blueprint(temp_bp, url_prefix='/temp')  # Register the temporary blueprint
-        app.register_blueprint(ai_chat_bp)  # Register the AI chat blueprint
-        logger.info("✅ Blueprints registrados da pasta app/routes/")
+        app.register_blueprint(temp_bp, url_prefix='/temp')
+        app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
+        logger.info("✅ Blueprints registrados do arquivo app/routes.py")
     except ImportError as e:
-        logger.warning(f"Erro ao importar do pacote app.routes: {str(e)}")
-        # Caso falhe, tentar importar do arquivo app/routes.py
+        logger.warning(f"Erro ao importar do arquivo app/routes.py: {str(e)}")
+        # Caso falhe, tentar importar do pacote app.routes (pasta)
         try:
-            from app.routes import main_bp, auth_bp, admin_bp
-            app.register_blueprint(main_bp, name='main')  # Explicitar o nome do blueprint
+            from app.routes.main import main_bp
+            from app.routes.auth import auth_bp
+            from app.routes.admin import admin_bp
+            from app.routes.user import user_bp
+            from app.routes.temporary import temp_bp
+            from app.routes.ai_chat import ai_chat_bp
+            
+            app.register_blueprint(main_bp)
             app.register_blueprint(auth_bp, url_prefix='/auth')
             app.register_blueprint(admin_bp, url_prefix='/admin')
-            
-            # Tentar importar o ai_chat_bp separadamente, pois pode não existir no arquivo
-            try:
-                from app.routes import ai_chat_bp
-                app.register_blueprint(ai_chat_bp)
-            except ImportError:
-                logger.warning("Blueprint ai_chat_bp não encontrado")
-            
-            logger.info("✅ Blueprints registrados do arquivo app/routes.py")
+            app.register_blueprint(user_bp, url_prefix='/user')
+            app.register_blueprint(temp_bp, url_prefix='/temp')
+            app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
+            logger.info("✅ Blueprints registrados da pasta app/routes/")
         except ImportError as e:
             logger.error(f"❌ ERRO FATAL: Não foi possível importar os blueprints: {str(e)}")
-            logger.exception("Detalhes do erro de importação:")
     
     with app.app_context():
         # Importações que dependem do contexto da aplicação

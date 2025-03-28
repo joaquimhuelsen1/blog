@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import User, Post, Comment
 from app.forms import PostForm, UserUpdateForm
+from app.utils import upload_image_to_supabase
 from functools import wraps
 
 # Decorador para verificar se o usuário é administrador
@@ -52,107 +53,91 @@ def all_posts():
     
     return render_template('admin/dashboard.html', posts=posts, pending_count=pending_count, show_all=True, stats=stats)
 
-@admin_bp.route('/post/new', methods=['GET', 'POST'])
+@admin_bp.route('/post/create', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def create_post():
     form = PostForm()
     
-    # Se o parâmetro premium=true está na URL, pré-selecionar a opção premium
-    if request.args.get('premium') == 'true' and request.method == 'GET':
-        form.premium_only.data = True
-    
     if form.validate_on_submit():
-        image_url = form.image_url.data if form.image_url.data else 'https://via.placeholder.com/1200x400'
-        
-        # Processar campos adicionais
-        reading_time = form.reading_time.data
-        created_at = request.form.get('created_at')
-        
-        # Criar post básico
-        post = Post(
-            title=form.title.data,
-            summary=form.summary.data,
-            content=form.content.data,
-            image_url=image_url,
-            premium_only=form.premium_only.data,
-            author=current_user,
-            reading_time=reading_time
-        )
-        
-        # Processar data de publicação
-        if created_at and created_at.strip():
-            try:
-                from datetime import datetime
-                post.created_at = datetime.fromisoformat(created_at.replace('T', ' '))
-            except (ValueError, TypeError):
-                flash('Invalid date format. Using current date instead.', 'warning')
-        
-        db.session.add(post)
-        db.session.commit()
-        
-        # Mensagem personalizada conforme o tipo de post
-        if post.premium_only:
-            flash('Your premium post has been created successfully!', 'success')
-        else:
-            flash('Your post has been created successfully!', 'success')
+        try:
+            # Processar upload de imagem se houver
+            image_url = form.image_url.data
             
-        return redirect(url_for('admin.dashboard'))
-        
-    return render_template('admin/create_post.html', form=form, title='New Post')
+            if form.image.data:
+                try:
+                    image_url = upload_image_to_supabase(form.image.data)
+                except Exception as e:
+                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
+                    return render_template('admin/create_post.html', form=form)
+            
+            # Criar o post
+            post = Post(
+                title=form.title.data,
+                content=form.content.data,
+                summary=form.summary.data,
+                image_url=image_url or 'https://via.placeholder.com/1200x400',
+                reading_time=form.reading_time.data,
+                premium_only=form.premium_only.data,
+                author=current_user
+            )
+            
+            if form.created_at.data:
+                post.created_at = form.created_at.data
+            
+            db.session.add(post)
+            db.session.commit()
+            
+            flash('Post criado com sucesso!', 'success')
+            return redirect(url_for('admin.dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao criar post: {str(e)}', 'danger')
+            print(f"ERRO ao criar post: {str(e)}")
+    
+    return render_template('admin/create_post.html', form=form)
 
 @admin_bp.route('/post/edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_post(post_id):
     post = Post.query.get_or_404(post_id)
-    
-    # Usar uma abordagem mais direta para processar o formulário
-    if request.method == 'POST':
-        # Extrair dados diretamente do request
-        title = request.form.get('title')
-        summary = request.form.get('summary')
-        content = request.form.get('content')
-        image_url = request.form.get('image_url')
-        premium_only = 'premium_only' in request.form
-        
-        # Novos campos
-        reading_time = request.form.get('reading_time')
-        created_at = request.form.get('created_at')
-        
-        # Validar campos obrigatórios
-        if not title or not summary or not content:
-            flash('Please fill in all required fields.', 'danger')
-        else:
-            # Atualizar o post com os novos dados
-            post.title = title
-            post.summary = summary
-            post.content = content
-            if image_url and image_url.strip():
-                post.image_url = image_url
-            post.premium_only = premium_only
-            
-            # Processar tempo de leitura
-            if reading_time and reading_time.strip() and reading_time.isdigit():
-                post.reading_time = int(reading_time)
-            else:
-                post.reading_time = None  # Usar cálculo automático
-                
-            # Processar data de publicação
-            if created_at and created_at.strip():
-                try:
-                    from datetime import datetime
-                    post.created_at = datetime.fromisoformat(created_at.replace('T', ' '))
-                except (ValueError, TypeError):
-                    flash('Invalid date format. Using original date.', 'warning')
-            
-            # Salvar no banco de dados
-            db.session.commit()
-            flash('Your post has been updated successfully!', 'success')
-            return redirect(url_for('admin.dashboard'))
-    
-    # Criar o formulário para o método GET (já preenchido com os dados do post)
     form = PostForm(obj=post)
+    
+    if form.validate_on_submit():
+        try:
+            # Processar upload de imagem se houver
+            image_url = form.image_url.data or post.image_url
+            
+            if form.image.data:
+                try:
+                    image_url = upload_image_to_supabase(form.image.data)
+                except Exception as e:
+                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
+                    return render_template('admin/edit_post.html', form=form, post=post)
+            
+            # Atualizar o post
+            post.title = form.title.data
+            post.content = form.content.data
+            post.summary = form.summary.data
+            post.image_url = image_url
+            post.reading_time = form.reading_time.data
+            post.premium_only = form.premium_only.data
+            
+            if form.created_at.data:
+                post.created_at = form.created_at.data
+            
+            db.session.commit()
+            
+            flash('Post atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao atualizar post: {str(e)}', 'danger')
+            print(f"ERRO ao atualizar post: {str(e)}")
+    
     return render_template('admin/edit_post.html', form=form, post=post)
 
 @admin_bp.route('/post/delete/<int:post_id>', methods=['POST'])

@@ -10,6 +10,8 @@ from datetime import datetime
 import time
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
+from flask import current_app
+from app.utils import send_registration_confirmation_email
 
 # Configurar logging
 logging.basicConfig(
@@ -138,11 +140,7 @@ def logout():
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     try:
-        logger.info("==== INICIANDO REGISTRO DE NOVO USUÁRIO ====")
-        logger.info(f"Data/hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
         if current_user.is_authenticated:
-            logger.info("Usuário já autenticado, redirecionando para página inicial")
             return redirect(url_for('main.index'))
         
         form = RegistrationForm()
@@ -152,22 +150,18 @@ def register():
                 # Verificar usuário e email existentes
                 existing_user = User.query.filter_by(username=form.username.data).first()
                 if existing_user:
-                    logger.info(f"Tentativa de cadastro com nome de usuário já existente: {form.username.data}")
                     flash('Username already exists. Please choose a different one.', 'danger')
                     return render_template('auth/register.html', form=form)
                 
                 existing_email = User.query.filter_by(email=form.email.data).first()
                 if existing_email:
-                    logger.info(f"Tentativa de cadastro com email já existente: {form.email.data}")
                     flash('Email already registered. Please use a different one or try to login.', 'danger')
                     return render_template('auth/register.html', form=form)
                 
                 # Criar novo usuário
-                logger.info(f"Criando novo usuário: {form.username.data} / {form.email.data}")
                 user = User(
                     username=form.username.data,
-                    email=form.email.data,
-                    age=form.age.data
+                    email=form.email.data
                 )
                 user.set_password(form.password.data)
                 
@@ -175,12 +169,24 @@ def register():
                 try:
                     db.session.add(user)
                     db.session.commit()
-                    logger.info(f"Usuário criado com sucesso! ID: {user.id}")
+                    
+                    # Tentar enviar email após inserção direta
+                    try:
+                        # Adicionar senha temporariamente para o email
+                        user.password = form.password.data
+                        send_registration_confirmation_email(user)
+                        delattr(user, 'password')  # Remover senha após enviar email
+                        logger.info(f"Email de confirmação enviado para {user.email}")
+                    except Exception as email_error:
+                        logger.error(f"Erro ao enviar email: {str(email_error)}")
+                        logger.error(traceback.format_exc())
+                        # Não falhar o registro se o email falhar
+                        flash('Your account has been created, but there was an error sending the confirmation email.', 'warning')
+                    
                     flash('Your account has been created! You are now able to log in.', 'success')
                     return redirect(url_for('auth.login'))
                 except Exception as db_error:
                     db.session.rollback()
-                    logger.error(f"Erro ao adicionar usuário: {str(db_error)}")
                     
                     # Tentar método alternativo com SQL direto
                     try:
@@ -189,8 +195,8 @@ def register():
                         
                         # Inserir diretamente com SQL
                         sql = """
-                        INSERT INTO "user" (username, email, password_hash, age, is_admin, is_premium, ai_credits, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO "user" (username, email, password_hash, is_admin, is_premium, ai_credits, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """
                         
                         # Obter conexão direta
@@ -200,7 +206,6 @@ def register():
                             user.username,
                             user.email,
                             password_hash,
-                            user.age,
                             False,  # is_admin
                             False,  # is_premium
                             5,      # ai_credits
@@ -210,22 +215,15 @@ def register():
                         cursor.close()
                         connection.close()
                         
-                        logger.info("Usuário criado com método alternativo!")
                         flash('Your account has been created! You are now able to log in.', 'success')
                         return redirect(url_for('auth.login'))
                     except Exception as alt_error:
-                        logger.error(f"Erro no método alternativo de registro: {str(alt_error)}")
                         flash('There was an error creating your account. Please try again.', 'danger')
             except Exception as e:
-                logger.error(f"Erro não tratado no processo de registro: {str(e)}")
                 flash('There was an error processing your registration. Please try again.', 'danger')
-        elif form.errors:
-            logger.warning(f"Erros de validação no formulário: {form.errors}")
             
         return render_template('auth/register.html', form=form)
     except Exception as e:
-        logger.error(f"Erro geral no registro: {str(e)}")
-        logger.error(traceback.format_exc())
         flash('An error occurred during registration. Please try again.', 'danger')
         return redirect(url_for('auth.register'))
 
@@ -371,4 +369,35 @@ def alternative_login():
         logger.error(f"Erro geral no login alternativo: {str(e)}")
         logger.error(traceback.format_exc())
         flash('Erro inesperado. Tente novamente mais tarde.', 'danger')
+        return redirect(url_for('main.index'))
+
+@auth_bp.route('/test-email', methods=['GET'])
+def test_email():
+    try:
+        logger.info("==== INICIANDO TESTE DE ENVIO DE EMAIL ====")
+        logger.info(f"Configurações de email:")
+        logger.info(f"MAIL_SERVER: {current_app.config.get('MAIL_SERVER')}")
+        logger.info(f"MAIL_PORT: {current_app.config.get('MAIL_PORT')}")
+        logger.info(f"MAIL_USE_SSL: {current_app.config.get('MAIL_USE_SSL')}")
+        logger.info(f"MAIL_USERNAME: {current_app.config.get('MAIL_USERNAME')}")
+        logger.info(f"ADMINS: {current_app.config.get('ADMINS')}")
+        
+        # Criar um usuário de teste
+        test_user = User(
+            username='joaquimhuelsen',
+            email='joaquimhuelsen@gmail.com'
+        )
+        logger.info(f"Usuário de teste criado: {test_user.email}")
+        
+        # Tentar enviar o email
+        logger.info("Tentando enviar email...")
+        send_registration_confirmation_email(test_user)
+        logger.info("Email enviado com sucesso!")
+        
+        flash('Email de teste enviado com sucesso!', 'success')
+        return redirect(url_for('main.index'))
+    except Exception as e:
+        logger.error(f"Erro ao enviar email de teste: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
         return redirect(url_for('main.index')) 

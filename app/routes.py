@@ -1,20 +1,54 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, jsonify, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from app import db
+from app import db, mail
 from app.models import User, Post, Comment
-from app.forms import LoginForm, RegistrationForm, PostForm, UserUpdateForm, ProfileUpdateForm, CommentForm, ChatMessageForm
-from werkzeug.urls import urlsplit
+from app.forms import (
+    LoginForm, RegistrationForm, PostForm, UserUpdateForm, ProfileUpdateForm, 
+    CommentForm, ChatMessageForm, PasswordChangeForm, UserProfileForm
+)
+from werkzeug.urls import urlsplit, urlparse
 from functools import wraps
 import os
 import requests
 import json
 import markdown
 from markdown.extensions import fenced_code, tables, nl2br
+from app.utils import upload_image_to_supabase, send_registration_confirmation_email
+import logging
+import traceback
+from datetime import datetime, timedelta
+import time
+import secrets
+from flask_wtf import CSRFProtect
+from flask_wtf.csrf import generate_csrf
+from flask_mail import Message
+from threading import Thread
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.FileHandler("app_debug.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger('blog_app')
+
+# Configurar logger específico para email
+email_logger = logging.getLogger('email_debug')
+email_logger.setLevel(logging.DEBUG)
+email_handler = logging.FileHandler('email_debug.log')
+email_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
+email_logger.addHandler(email_handler)
 
 # Blueprints
 main_bp = Blueprint('main', __name__)
 auth_bp = Blueprint('auth', __name__)
 admin_bp = Blueprint('admin', __name__)
+user_bp = Blueprint('user', __name__)
+temp_bp = Blueprint('temporary', __name__)
+ai_chat_bp = Blueprint('ai_chat', __name__)
 
 # Decoradores personalizados
 def admin_required(f):
@@ -35,35 +69,41 @@ def premium_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Para depuração - configurar como True para simular respostas sem chamar a API OpenAI
-SIMULATION_MODE = True  # Altere para False para usar a API real
-
-# Rotas principais
+# Rotas principais (main_bp)
 @main_bp.route('/')
 def index():
-    page = request.args.get('page', 1, type=int)
-    
-    # Mostrar todos os posts para todos os usuários (incluindo premium)
-    posts = Post.query.order_by(Post.created_at.desc()).paginate(
-        page=page, per_page=5, error_out=False)
-    
-    # Verificar e consertar posts com imagens quebradas
-    for post in posts.items:
-        if post.id == 4:
-            # Atualizar a URL da imagem do post 4 com a nova URL
-            post.image_url = "https://img.freepik.com/free-photo/side-view-couple-holding-each-other_23-2148735555.jpg?t=st=1742409398~exp=1742412998~hmac=59e342a62de1c61aedc5a53c00356ab4406ded130e98eca884480d2d68360910&w=900"
-            db.session.commit()
-        elif not post.image_url or not post.image_url.strip() or (not post.image_url.startswith(('http://', 'https://')) and post.image_url.startswith('/static/')):
-            static_path = os.path.join('app', post.image_url[1:] if post.image_url.startswith('/') else '')
-            if not os.path.exists(static_path):
-                post.image_url = 'https://via.placeholder.com/1200x400?text=Post+' + str(post.id)
+    """Rota para a página inicial"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        posts = Post.query.order_by(Post.created_at.desc()).paginate(
+            page=page, per_page=5, error_out=False)
+        
+        # Verificar e consertar posts com imagens quebradas
+        for post in posts.items:
+            if post.id == 4:
+                post.image_url = "https://img.freepik.com/free-photo/side-view-couple-holding-each-other_23-2148735555.jpg?t=st=1742409398~exp=1742412998~hmac=59e342a62de1c61aedc5a53c00356ab4406ded130e98eca884480d2d68360910&w=900"
                 db.session.commit()
-    
-    return render_template('public/index.html', posts=posts)
+            elif not post.image_url or not post.image_url.strip() or (not post.image_url.startswith(('http://', 'https://')) and post.image_url.startswith('/static/')):
+                static_path = os.path.join('app', post.image_url[1:] if post.image_url.startswith('/') else '')
+                if not os.path.exists(static_path):
+                    post.image_url = 'https://via.placeholder.com/1200x400?text=Post+' + str(post.id)
+                    db.session.commit()
+        
+        return render_template('public/index.html', posts=posts)
+    except Exception as e:
+        logger.error(f"ERRO NA PÁGINA INICIAL: {str(e)}")
+        return render_template('errors/500.html', error=str(e)), 500
 
 @main_bp.route('/post/<int:post_id>')
 def post(post_id):
     post = Post.query.get_or_404(post_id)
+    
+   
+    # Verificar se o post é premium e se o usuário NÃO tem acesso premium
+    can_access_premium = current_user.is_authenticated and (current_user.is_premium or current_user.is_admin)
+    
+    if post.premium_only and not can_access_premium:
+        flash('This content is exclusive for premium users.', 'info')
     
     # Buscar posts recentes (excluindo o atual)
     recent_posts = Post.query.filter(Post.id != post_id).order_by(Post.created_at.desc()).limit(3).all()
@@ -76,7 +116,6 @@ def post(post_id):
     
     return render_template('public/post.html', post=post, recent_posts=recent_posts, form=form, comments=comments)
 
-# Nova rota para lidar apenas com comentários via AJAX
 @main_bp.route('/post/<int:post_id>/comment', methods=['POST'])
 @login_required
 def add_comment(post_id):
@@ -99,15 +138,11 @@ def add_comment(post_id):
 
 @main_bp.route('/posts')
 def all_posts():
-    """
-    Lista todos os posts com opção de filtrar por tipo (gratuito ou premium)
-    e ordenar por data ou tempo de leitura
-    """
+    """Lista todos os posts com opção de filtrar por tipo e ordenar"""
     page = request.args.get('page', 1, type=int)
     post_type = request.args.get('type', 'all')  # all, free, premium
     sort_by = request.args.get('sort', 'recent')  # recent, read_time_asc, read_time_desc
     
-    # Filtrar baseado no tipo selecionado
     query = Post.query
     
     if post_type == 'free':
@@ -115,23 +150,17 @@ def all_posts():
     elif post_type == 'premium':
         query = query.filter_by(premium_only=True)
     
-    # Ordenar baseado no parâmetro sort_by
     if sort_by == 'recent':
         query = query.order_by(Post.created_at.desc())
     elif sort_by == 'read_time_asc':
-        # Não podemos ordenar diretamente pelo tempo de leitura, pois é calculado dinamicamente
-        # Então usamos o comprimento do conteúdo como estimativa
         query = query.order_by(db.func.length(Post.content).asc())
     elif sort_by == 'read_time_desc':
         query = query.order_by(db.func.length(Post.content).desc())
     else:
-        # Padrão: ordenar por data (mais recentes)
         query = query.order_by(Post.created_at.desc())
     
-    posts = query.paginate(
-        page=page, per_page=10, error_out=False)
+    posts = query.paginate(page=page, per_page=10, error_out=False)
     
-    # Obter contagem para os diferentes tipos de posts
     posts_count = {
         'all': Post.query.count(),
         'free': Post.query.filter_by(premium_only=False).count(),
@@ -150,204 +179,63 @@ def coaching():
     """Render the coaching page."""
     return render_template('public/coaching.html')
 
-@main_bp.route('/teste-de-reconquista')
-def teste_de_reconquista():
-    """Render the reconquest test page."""
-    return render_template('public/coaching.html')
-
-@main_bp.route('/enviar-teste', methods=['POST'])
-def enviar_teste():
-    """Processa o envio do teste de reconquista e envia para o webhook externo."""
-    if request.method == 'POST':
-        try:
-            # Obter dados do formulário
-            form_data = request.json
-            
-            # Log dos dados recebidos
-            print(f"Dados do teste recebidos: {form_data}")
-            
-            # URL do webhook
-            webhook_url = 'https://primary-production-eefe.up.railway.app/webhook/5d75cf8b-dbf8-4be6-afdc-25bc764cc55c'
-            
-            # Enviar dados para o webhook externo
-            response = requests.post(
-                webhook_url,
-                json=form_data,
-                headers={'Content-Type': 'application/json'}
-            )
-            
-            # Verificar resposta
-            if response.ok:
-                try:
-                    # Tentar processar a resposta como JSON
-                    result = response.json()
-                    return jsonify({'success': True, 'data': result})
-                except:
-                    # Se a resposta não for JSON, retornar sucesso simples
-                    return jsonify({'success': True, 'message': 'Dados enviados com sucesso'})
-            else:
-                return jsonify({
-                    'success': False, 
-                    'message': f'Erro no webhook: {response.status_code} - {response.text}'
-                }), 500
-                
-        except Exception as e:
-            print(f"Erro ao processar teste: {str(e)}")
-            return jsonify({'success': False, 'message': str(e)}), 500
-    
-    return jsonify({'success': False, 'message': 'Método não permitido'}), 405
-
-@main_bp.route('/premium')
-def premium_subscription():
-    """Página para mostrar informações sobre a assinatura premium"""
-    return render_template('public/premium.html')
-
-@main_bp.route('/ia-relacionamento', methods=['GET', 'POST'])
-def ia_relacionamento():
-    """Página de IA de Relacionamento que integra com o Assistente do OpenAI"""
-    # Verificar se é uma requisição AJAX
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    
-    # Inicializar formulário
-    form = ChatMessageForm()
-    
-    # Inicializar ou recuperar a thread_id da sessão
-    if 'openai_thread_id' not in session:
-        session['openai_thread_id'] = None
-    
-    # Recuperar histórico de chat
-    if 'chat_messages' not in session:
-        session['chat_messages'] = []
-    
-    messages = session['chat_messages']
-    
-    # Para requisições GET ou formulário inválido, retornar template normalmente
-    if request.method == 'GET' or not form.validate_on_submit():
-        return render_template('public/ia_relacionamento.html', form=form, messages=messages)
-    
-    # A partir daqui, estamos lidando com um POST validado
+@main_bp.route('/test-email')
+def test_email():
     try:
-        user_message = form.message.data
-        print(f"Mensagem recebida: {user_message}")
+        logger.info("==== INICIANDO TESTE DE EMAIL ====")
+        logger.info("Configurações de email:")
+        logger.info(f"MAIL_SERVER: {current_app.config['MAIL_SERVER']}")
+        logger.info(f"MAIL_PORT: {current_app.config['MAIL_PORT']}")
+        logger.info(f"MAIL_USE_SSL: {current_app.config['MAIL_USE_SSL']}")
+        logger.info(f"MAIL_USERNAME: {current_app.config['MAIL_USERNAME']}")
+        logger.info("MAIL_PASSWORD: ****")
         
-        # Se estiver no modo de simulação, use respostas pré-definidas (100% garantido de funcionar)
-        import time
-        import random
-        import json
+        # Criar um usuário de teste
+        test_user = User(
+            username='joaquimhuelsen',
+            email='joaquimhuelsen@gmail.com'
+        )
+        logger.info(f"Usuário de teste criado: {test_user.username} ({test_user.email})")
         
-        # Simula algum processamento
-        time.sleep(0.5)
+        # Tentar enviar o email
+        logger.info("Tentando enviar email de teste...")
+        send_registration_confirmation_email(test_user)
+        logger.info("Email de teste enviado com sucesso!")
         
-        # Lista de respostas simuladas
-        simulated_responses = [
-            "Entendi sua pergunta! Em relacionamentos, é importante manter a comunicação aberta e honesta. Tente conversar sobre seus sentimentos de maneira clara.",
-            "Essa é uma situação comum. Muitas vezes, dar espaço ao parceiro pode ser uma boa estratégia, enquanto você trabalha em seu desenvolvimento pessoal.",
-            "Obrigado por compartilhar isso comigo. Talvez seja útil refletir sobre o que você realmente deseja nesse relacionamento e se ele está atendendo suas necessidades.",
-            "Os relacionamentos têm altos e baixos. Neste momento, foque em autoconhecimento e em entender o que você realmente quer para o futuro.",
-            "É natural sentir-se assim! Muitas pessoas passam por fases semelhantes. Tente focar em atividades que te fazem bem enquanto processa esses sentimentos."
-        ]
-        
-        # Escolhe uma resposta aleatória
-        assistant_response = random.choice(simulated_responses)
-        
-        # Sanitizar a resposta usando o método seguro JSON
-        assistant_response_safe = json.loads(json.dumps(assistant_response))
-        
-        # Adiciona à lista de mensagens
-        messages.append({"user": user_message, "assistant": assistant_response_safe})
-        session['chat_messages'] = messages
-        
-        # Para requisições AJAX, garantir resposta JSON
-        if is_ajax:
-            return jsonify({
-                'success': True,
-                'response': assistant_response_safe
-            })
-        else:
-            # Caso não seja AJAX (improvável, mas por segurança)
-            form.message.data = ""
-            return render_template('public/ia_relacionamento.html', form=form, messages=messages)
-            
+        flash('Email de teste enviado com sucesso!', 'success')
+        return redirect(url_for('main.index'))
     except Exception as e:
-        # Log detalhado do erro para diagnóstico
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"ERRO CRÍTICO: {str(e)}")
-        print(f"Detalhes: {error_details}")
-        
-        # Garantir que sempre retornamos JSON em caso de erro para requisições AJAX
-        if is_ajax:
-            return jsonify({
-                'success': False,
-                'error': "Ocorreu um erro ao processar sua mensagem. Por favor, tente novamente."
-            })
-        else:
-            # Para requisições não-AJAX, usar flash e template
-            flash('Ocorreu um erro ao processar sua mensagem.', 'danger')
-            return render_template('public/ia_relacionamento.html', form=form, messages=messages)
+        logger.error(f"ERRO AO ENVIAR EMAIL: {str(e)}")
+        logger.error(f"Detalhes do erro: {traceback.format_exc()}")
+        flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
+        return redirect(url_for('main.index'))
 
-@main_bp.route('/limpar-chat', methods=['POST'])
-def limpar_chat():
-    """Limpa o histórico de chat da sessão atual"""
-    try:
-        # Remover o histórico de mensagens
-        if 'chat_messages' in session:
-            session.pop('chat_messages')
-        
-        # Também encerrar a thread atual na API OpenAI, se existir
-        if 'openai_thread_id' in session and session['openai_thread_id']:
-            try:
-                from openai import OpenAI
-                from flask import current_app
-                
-                # Obter as credenciais
-                api_key = current_app.config['OPENAI_API_KEY']
-                
-                # Configurar o cliente da API
-                client = OpenAI(api_key=api_key)
-                
-                # Não há necessidade de excluir a thread, apenas remover a referência
-                session.pop('openai_thread_id')
-                
-            except Exception as e:
-                # Se ocorrer algum erro na API, simplesmente logue e continue
-                print(f"Erro ao encerrar thread OpenAI: {str(e)}")
-        
-        # Criar uma resposta JSON segura
-        import json
-        response_data = {"success": True}
-        # Serializar para garantir compatibilidade JSON
-        response_data = json.loads(json.dumps(response_data))
-        return jsonify(response_data)
-    
-    except Exception as e:
-        import json
-        error_msg = str(e)
-        # Serializar para garantir compatibilidade JSON
-        response_data = {"success": False, "message": json.loads(json.dumps(error_msg))}
-        return jsonify(response_data)
-
-# Rotas de autenticação
+# Rotas de autenticação (auth_bp)
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+    
     form = LoginForm()
+    
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        if user is None or not user.check_password(form.password.data):
-            flash('Invalid email or password', 'danger')
-            return redirect(url_for('auth.login'))
-        login_user(user, remember=form.remember_me.data)
-        next_page = request.args.get('next')
-        if not next_page or urlsplit(next_page).netloc != '':
-            next_page = url_for('main.index')
-        return redirect(next_page)
+        
+        if user and user.check_password(form.password.data):
+            login_user(user, remember=form.remember_me.data)
+            next_page = request.args.get('next')
+            if not next_page or urlparse(next_page).netloc != '':
+                next_page = url_for('main.index')
+            return redirect(next_page)
+        
+        flash('Invalid email or password', 'danger')
+    
     return render_template('auth/login.html', form=form)
 
 @auth_bp.route('/logout')
 def logout():
     logout_user()
+    session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('main.index'))
 
@@ -355,37 +243,59 @@ def logout():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+    
     form = RegistrationForm()
+    
     if form.validate_on_submit():
-        user = User(username=form.username.data, email=form.email.data)
-        user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
-        flash('Congratulations, you are now registered!', 'success')
-        return redirect(url_for('auth.login'))
+        try:
+            # Verificar usuário e email existentes
+            existing_user = User.query.filter_by(username=form.username.data).first()
+            if existing_user:
+                flash('Username already exists. Please choose a different one.', 'danger')
+                return render_template('auth/register.html', form=form)
+            
+            existing_email = User.query.filter_by(email=form.email.data).first()
+            if existing_email:
+                flash('Email already registered. Please use a different one or try to login.', 'danger')
+                return render_template('auth/register.html', form=form)
+            
+            # Criar novo usuário
+            user = User(username=form.username.data, email=form.email.data)
+            plain_password = form.password.data
+            user.set_password(plain_password)
+            user.password = plain_password  # Temporário para o email
+            
+            # Salvar usuário
+            db.session.add(user)
+            db.session.commit()
+            
+            # Enviar email
+            logger.info(f"Enviando email de confirmação para {user.email}")
+            try:
+                send_registration_confirmation_email(user)
+                logger.info("Email enviado com sucesso!")
+            except Exception as email_error:
+                logger.error(f"Erro ao enviar email: {str(email_error)}")
+                logger.error(traceback.format_exc())
+                # Não vamos falhar o registro se o email falhar
+                flash('Your account has been created, but there was an error sending the confirmation email.', 'warning')
+            
+            # Limpar senha temporária
+            delattr(user, 'password')
+            
+            flash('Your account has been created! You are now able to log in.', 'success')
+            return redirect(url_for('auth.login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro no registro: {str(e)}")
+            logger.error(traceback.format_exc())
+            flash('There was an error processing your registration. Please try again.', 'danger')
+            return render_template('auth/register.html', form=form)
+    
     return render_template('auth/register.html', form=form)
 
-@auth_bp.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    form = ProfileUpdateForm(original_username=current_user.username, original_email=current_user.email)
-    
-    if form.validate_on_submit():
-        current_user.username = form.username.data
-        current_user.email = form.email.data
-        current_user.age = form.age.data
-        
-        db.session.commit()
-        flash('Your profile has been updated!', 'success')
-        return redirect(url_for('auth.profile'))
-    elif request.method == 'GET':
-        form.username.data = current_user.username
-        form.email.data = current_user.email
-        form.age.data = current_user.age
-    
-    return render_template('auth/profile.html', form=form)
-
-# Rotas de administração
+# Rotas de administração (admin_bp)
 @admin_bp.route('/')
 @login_required
 @admin_required
@@ -393,7 +303,6 @@ def dashboard():
     posts = Post.query.order_by(Post.created_at.desc()).limit(10).all()
     pending_count = Comment.query.filter_by(approved=False).count()
     
-    # Estatísticas para o dashboard
     stats = {
         'posts_count': Post.query.count(),
         'premium_posts_count': Post.query.filter_by(premium_only=True).count(),
@@ -403,100 +312,104 @@ def dashboard():
     
     return render_template('admin/dashboard.html', posts=posts, pending_count=pending_count, stats=stats)
 
-@admin_bp.route('/all-posts')
-@login_required
-@admin_required
-def all_posts():
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    pending_count = Comment.query.filter_by(approved=False).count()
-    
-    # Estatísticas para o dashboard
-    stats = {
-        'posts_count': Post.query.count(),
-        'premium_posts_count': Post.query.filter_by(premium_only=True).count(),
-        'users_count': User.query.count(),
-        'premium_users_count': User.query.filter_by(is_premium=True).count()
-    }
-    
-    return render_template('admin/dashboard.html', posts=posts, pending_count=pending_count, show_all=True, stats=stats)
-
-@admin_bp.route('/post/new', methods=['GET', 'POST'])
+@admin_bp.route('/post/create', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def create_post():
     form = PostForm()
     
-    # Se o parâmetro premium=true está na URL, pré-selecionar a opção premium
-    if request.args.get('premium') == 'true' and request.method == 'GET':
-        form.premium_only.data = True
-    
     if form.validate_on_submit():
-        image_url = form.image_url.data if form.image_url.data else 'https://via.placeholder.com/1200x400'
-        post = Post(
-            title=form.title.data,
-            summary=form.summary.data,
-            content=form.content.data,
-            image_url=image_url,
-            premium_only=form.premium_only.data,
-            author=current_user
-        )
-        db.session.add(post)
-        db.session.commit()
-        
-        # Mensagem personalizada conforme o tipo de post
-        if post.premium_only:
-            flash('Your premium post has been created successfully!', 'success')
-        else:
-            flash('Your post has been created successfully!', 'success')
+        try:
+            # Processar upload de imagem se houver
+            image_url = form.image_url.data
             
-        return redirect(url_for('admin.dashboard'))
-        
-    return render_template('admin/create_post.html', form=form, title='New Post')
+            if form.image.data:
+                try:
+                    image_url = upload_image_to_supabase(form.image.data)
+                except Exception as e:
+                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
+                    return render_template('admin/create_post.html', form=form)
+            
+            # Criar o post
+            post = Post(
+                title=form.title.data,
+                content=form.content.data,
+                summary=form.summary.data,
+                image_url=image_url or 'https://via.placeholder.com/1200x400',
+                reading_time=form.reading_time.data,
+                premium_only=form.premium_only.data,
+                author=current_user
+            )
+            
+            if form.created_at.data:
+                post.created_at = form.created_at.data
+            
+            db.session.add(post)
+            db.session.commit()
+            flash('Post criado com sucesso!', 'success')
+            return redirect(url_for('admin.dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao criar post: {str(e)}', 'danger')
+    
+    return render_template('admin/create_post.html', form=form)
 
 @admin_bp.route('/post/edit/<int:post_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_post(post_id):
     post = Post.query.get_or_404(post_id)
-    
-    # Usar uma abordagem mais direta para processar o formulário
-    if request.method == 'POST':
-        # Extrair dados diretamente do request
-        title = request.form.get('title')
-        summary = request.form.get('summary')
-        content = request.form.get('content')
-        image_url = request.form.get('image_url')
-        premium_only = 'premium_only' in request.form
-        
-        # Validar campos obrigatórios
-        if not title or not summary or not content:
-            flash('Please fill in all required fields.', 'danger')
-        else:
-            # Atualizar o post com os novos dados
-            post.title = title
-            post.summary = summary
-            post.content = content
-            if image_url and image_url.strip():
-                post.image_url = image_url
-            post.premium_only = premium_only
-            
-            # Salvar no banco de dados
-            db.session.commit()
-            flash('Your post has been updated successfully!', 'success')
-            return redirect(url_for('admin.dashboard'))
-    
-    # Criar o formulário para o método GET (já preenchido com os dados do post)
     form = PostForm(obj=post)
+    
+    if form.validate_on_submit():
+        try:
+            # Processar upload de imagem se houver
+            image_url = form.image_url.data or post.image_url
+            
+            if form.image.data:
+                try:
+                    image_url = upload_image_to_supabase(form.image.data)
+                except Exception as e:
+                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
+                    return render_template('admin/edit_post.html', form=form, post=post)
+            
+            # Atualizar o post
+            post.title = form.title.data
+            post.content = form.content.data
+            post.summary = form.summary.data
+            post.image_url = image_url
+            post.reading_time = form.reading_time.data
+            post.premium_only = form.premium_only.data
+            
+            if form.created_at.data:
+                post.created_at = form.created_at.data
+            
+            db.session.commit()
+            
+            flash('Post atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao atualizar post: {str(e)}', 'danger')
+    
     return render_template('admin/edit_post.html', form=form, post=post)
 
 @admin_bp.route('/post/delete/<int:post_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_post(post_id):
-    post = Post.query.get_or_404(post_id)
-    db.session.delete(post)
-    db.session.commit()
-    flash('Post deleted successfully!', 'success')
+    try:
+        post = Post.query.get_or_404(post_id)
+        Comment.query.filter_by(post_id=post_id).delete()
+        db.session.delete(post)
+        db.session.commit()
+        flash('Post deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting post: {str(e)}', 'danger')
+    
     return redirect(url_for('admin.dashboard'))
 
 @admin_bp.route('/comments/pending')
@@ -505,7 +418,6 @@ def delete_post(post_id):
 def pending_comments():
     comments = Comment.query.filter_by(approved=False).order_by(Comment.created_at.desc()).all()
     pending_count = len(comments)
-    
     return render_template('admin/comments.html', comments=comments, pending_count=pending_count)
 
 @admin_bp.route('/comment/approve/<int:comment_id>', methods=['POST'])
@@ -540,43 +452,18 @@ def manage_users():
 @admin_required
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
-    form = UserUpdateForm()
+    form = UserUpdateForm(obj=user)
     
-    if request.method == 'POST':
-        if 'submit' in request.form:
-            # Extrair e validar dados
-            username = request.form.get('username')
-            email = request.form.get('email')
-            age = request.form.get('age')
-            is_premium = 'is_premium' in request.form
-            is_admin = 'is_admin' in request.form
-            
-            # Verificar disponibilidade de username e email
-            username_exists = User.query.filter(User.username == username, User.id != user_id).first()
-            email_exists = User.query.filter(User.email == email, User.id != user_id).first()
-            
-            if username_exists:
-                flash('This username is already in use.', 'danger')
-            elif email_exists:
-                flash('This email is already in use.', 'danger')
-            else:
-                # Atualizar o usuário
-                user.username = username
-                user.email = email
-                user.age = int(age) if age else None
-                user.is_premium = is_premium
-                user.is_admin = is_admin
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.age = form.age.data
+        user.is_premium = form.is_premium.data
+        user.is_admin = form.is_admin.data
                 
-                db.session.commit()
-                flash(f'User {user.username} updated successfully!', 'success')
-                return redirect(url_for('admin.manage_users'))
-    
-    # Preencher o formulário com os dados do usuário
-    form.username.data = user.username
-    form.email.data = user.email
-    form.age.data = user.age
-    form.is_premium.data = user.is_premium
-    form.is_admin.data = user.is_admin
+        db.session.commit()
+        flash('User updated successfully!', 'success')
+        return redirect(url_for('admin.manage_users'))
     
     return render_template('admin/edit_user.html', form=form, user=user)
 
@@ -585,11 +472,225 @@ def edit_user(user_id):
 @admin_required
 def delete_user(user_id):
     if current_user.id == user_id:
-        flash('You cannot delete your own account.', 'danger')
+        flash('You cannot delete your own account!', 'danger')
         return redirect(url_for('admin.manage_users'))
         
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
-    flash(f'User {user.username} has been deleted successfully.', 'success')
+    flash('User deleted successfully!', 'success')
     return redirect(url_for('admin.manage_users')) 
+
+# Rotas de usuário (user_bp)
+@user_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """Página de perfil do usuário"""
+    form = UserProfileForm()
+    
+    if form.validate_on_submit():
+        if form.email.data != current_user.email:
+            existing_user = User.query.filter_by(email=form.email.data).first()
+            if existing_user and existing_user.id != current_user.id:
+                flash('Este email já está em uso por outro usuário.', 'danger')
+                return render_template('user/profile.html', form=form)
+            
+            current_user.email = form.email.data
+            
+        if form.password.data:
+            current_user.set_password(form.password.data)
+            flash('Sua senha foi atualizada com sucesso.', 'success')
+            
+        if form.age.data:
+            current_user.age = form.age.data
+            
+        db.session.commit()
+        flash('Seu perfil foi atualizado com sucesso.', 'success')
+        return redirect(url_for('user.profile'))
+        
+    elif request.method == 'GET':
+        form.email.data = current_user.email
+        form.age.data = current_user.age
+        
+    return render_template('user/profile.html', form=form)
+
+@user_bp.route('/upgrade')
+@login_required
+def upgrade():
+    """Página para upgrade para conta premium"""
+    if current_user.is_premium:
+        flash('Você já é um usuário premium!', 'info')
+        return redirect(url_for('main.index'))
+        
+    return render_template('user/upgrade.html')
+
+# Rotas temporárias (temp_bp)
+SECRET_TOKEN = os.environ.get('ADMIN_CREATE_TOKEN') or secrets.token_hex(16)
+
+@temp_bp.route('/create-admin', methods=['POST'])
+def create_admin():
+    """Endpoint temporário para criar um usuário admin"""
+    token = request.args.get('token')
+    if not token or token != SECRET_TOKEN:
+        return jsonify({"error": "Invalid or missing token"}), 403
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not username or not email or not password:
+        return jsonify({"error": "Missing required fields"}), 400
+    
+    existing_user = User.query.filter(
+        (User.username == username) | (User.email == email)
+    ).first()
+    
+    if existing_user:
+        if existing_user.username == username:
+            return jsonify({"error": f"Username '{username}' already exists"}), 409
+        else:
+            return jsonify({"error": f"Email '{email}' already exists"}), 409
+    
+    try:
+        user = User(
+            username=username,
+            email=email,
+            is_admin=True,
+            is_premium=True
+        )
+        user.set_password(password)
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Admin user created successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_admin": user.is_admin
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
+
+# Rotas de IA (ai_chat_bp)
+SIMULATION_MODE = True  # Altere para False para usar a API real
+
+@ai_chat_bp.route('/ia-relacionamento', methods=['GET', 'POST'])
+def ia_relacionamento():
+    """Página de IA de Relacionamento"""
+    # Verificar se o usuário está autenticado e é premium
+    can_access_ai = current_user.is_authenticated and (current_user.is_premium or current_user.is_admin)
+    
+    # Bloquear acesso para usuários não premium
+    if not can_access_ai:
+        flash('Este recurso de IA é exclusivo para usuários premium.', 'info')
+        return redirect(url_for('main.premium_subscription'))
+    
+    # Verificar se é uma requisição AJAX
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
+    # Inicializar formulário
+    form = ChatMessageForm()
+    
+    # Para requisições GET, retornar template normalmente
+    if request.method == 'GET' or not is_ajax:
+        if 'chat_messages' not in session:
+            session['chat_messages'] = []
+            session.modified = True
+            
+        credits = -1  # -1 representa créditos ilimitados
+            
+        return render_template('public/ia_relacionamento.html', 
+                             form=form, 
+                             messages=session.get('chat_messages', []),
+                             credits=credits)
+    
+    # Para requisições POST com AJAX
+    if request.method == 'POST' and is_ajax:
+        try:
+            if not current_user.is_authenticated:
+                return jsonify({
+                    'success': False,
+                    'error': "Você precisa estar logado para enviar mensagens.",
+                    'redirect': url_for('auth.login')
+                })
+            
+            if not current_user.is_premium and not current_user.is_admin:
+                return jsonify({
+                    'success': False,
+                    'error': "Este recurso é exclusivo para usuários premium.",
+                    'redirect': url_for('main.premium_subscription')
+                })
+            
+            user_message = form.message.data
+            
+            if not user_message or user_message.strip() == '':
+                return jsonify({
+                    'success': False,
+                    'error': "Por favor, digite uma mensagem válida."
+                })
+            
+            if SIMULATION_MODE:
+                time.sleep(0.5)
+                
+                respostas_simuladas = [
+                    f"Obrigado por compartilhar isso comigo. Com base no que você descreveu sobre '{user_message[:20]}...', recomendo que você mantenha uma comunicação clara e honesta.",
+                    f"Considerando sua situação com '{user_message[:15]}...', acho importante você focar primeiro em seu próprio desenvolvimento pessoal.",
+                    f"Analisando o que você disse sobre '{user_message[:20]}...', sugiro dar espaço para que ambos possam refletir.",
+                    f"Baseado na sua mensagem sobre '{user_message[:15]}...', recomendo estabelecer limites saudáveis.",
+                    f"Sua situação com '{user_message[:20]}...' é comum em muitos relacionamentos. Lembre-se que a reconquista não deve ser forçada."
+                ]
+                
+                assistant_response = random.choice(respostas_simuladas)
+            else:
+                # Implementar integração real com OpenAI aqui
+                assistant_response = "Desculpe, o serviço de IA está temporariamente indisponível."
+            
+            # Atualizar histórico de chat
+            if 'chat_messages' not in session:
+                session['chat_messages'] = []
+            
+            session['chat_messages'].append({
+                'role': 'user',
+                'content': user_message
+            })
+            
+            session['chat_messages'].append({
+                'role': 'assistant',
+                'content': assistant_response
+            })
+            
+            session.modified = True
+            
+            return jsonify({
+                'success': True,
+                'message': assistant_response
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f"Erro ao processar mensagem: {str(e)}"
+            })
+
+@ai_chat_bp.route('/limpar-chat', methods=['POST'])
+def limpar_chat():
+    """Limpar histórico do chat"""
+    try:
+        session['chat_messages'] = []
+        session.modified = True
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f"Erro ao limpar chat: {str(e)}"
+        }) 
