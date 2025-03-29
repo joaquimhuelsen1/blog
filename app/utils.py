@@ -84,6 +84,63 @@ def upload_image_to_supabase(file, folder='posts') -> str:
         print(f"Erro ao fazer upload da imagem: {str(e)}")
         raise 
 
+def try_smtp_connection(app, msg, logger):
+    """Tenta diferentes configurações de conexão SMTP"""
+    # Lista de configurações para tentar
+    configs = [
+        # Configuração 1: SSL na porta 465
+        {
+            'port': 465,
+            'use_ssl': True,
+            'use_tls': False,
+            'description': 'SSL na porta 465'
+        },
+        # Configuração 2: TLS na porta 587
+        {
+            'port': 587,
+            'use_ssl': False,
+            'use_tls': True,
+            'description': 'TLS na porta 587'
+        },
+        # Configuração 3: Sem SSL/TLS na porta 25
+        {
+            'port': 25,
+            'use_ssl': False,
+            'use_tls': False,
+            'description': 'Sem SSL/TLS na porta 25'
+        }
+    ]
+
+    last_error = None
+    for config in configs:
+        try:
+            logger.info(f"\nTentando conexão com: {config['description']}")
+            logger.info(f"Servidor: {app.config['MAIL_SERVER']}")
+            logger.info(f"Porta: {config['port']}")
+            logger.info(f"SSL: {config['use_ssl']}, TLS: {config['use_tls']}")
+
+            # Aplicar configuração
+            app.config['MAIL_PORT'] = config['port']
+            app.config['MAIL_USE_SSL'] = config['use_ssl']
+            app.config['MAIL_USE_TLS'] = config['use_tls']
+
+            # Tentar conexão
+            with mail.connect() as conn:
+                logger.info("Conexão SMTP estabelecida com sucesso")
+                logger.info("Tentando enviar email...")
+                conn.send(msg)
+                logger.info("Email enviado com sucesso!")
+                return True
+
+        except Exception as e:
+            last_error = e
+            logger.error(f"Erro ao tentar {config['description']}: {str(e)}")
+            logger.error(f"Detalhes do erro:\n{traceback.format_exc()}")
+            continue
+
+    if last_error:
+        raise last_error
+
 def send_async_email(app, msg):
     try:
         logger = logging.getLogger('email_debug')
@@ -93,32 +150,7 @@ def send_async_email(app, msg):
         
         with app.app_context():
             logger.info("Contexto da aplicação estabelecido")
-            logger.info("Tentando conectar ao servidor SMTP...")
-            logger.info(f"Configurações SMTP: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
-            logger.info(f"SSL: {app.config['MAIL_USE_SSL']}, TLS: {app.config['MAIL_USE_TLS']}")
-            
-            try:
-                # Tentar estabelecer conexão SMTP primeiro
-                with mail.connect() as conn:
-                    logger.info("Conexão SMTP estabelecida com sucesso")
-                    logger.info("Tentando enviar email...")
-                    conn.send(msg)
-                    logger.info("Email enviado com sucesso!")
-            except Exception as smtp_error:
-                logger.error(f"Erro SMTP: {str(smtp_error)}")
-                logger.error(f"Detalhes do erro SMTP: {traceback.format_exc()}")
-                # Tentar novamente sem SSL/TLS
-                try:
-                    logger.info("Tentando enviar sem SSL/TLS...")
-                    app.config['MAIL_USE_SSL'] = False
-                    app.config['MAIL_USE_TLS'] = False
-                    with mail.connect() as conn:
-                        conn.send(msg)
-                        logger.info("Email enviado com sucesso sem SSL/TLS!")
-                except Exception as retry_error:
-                    logger.error(f"Erro na segunda tentativa: {str(retry_error)}")
-                    logger.error(f"Detalhes do erro: {traceback.format_exc()}")
-                    raise
+            try_smtp_connection(app, msg, logger)
                 
     except Exception as e:
         logger.error(f"Erro no envio assíncrono: {str(e)}")
@@ -222,30 +254,9 @@ def send_premium_confirmation_email(user):
         msg.html = html_body
         logger.info("Mensagem criada com sucesso")
         
-        # Enviar email
-        logger.info("\nIniciando envio de email...")
-        try:
-            # Tentar estabelecer conexão SMTP primeiro
-            with mail.connect() as conn:
-                logger.info("Conexão SMTP estabelecida com sucesso")
-                logger.info("Tentando enviar email...")
-                conn.send(msg)
-                logger.info("Email enviado com sucesso!")
-        except Exception as smtp_error:
-            logger.error(f"\nErro SMTP ao enviar email: {str(smtp_error)}")
-            logger.error(f"Detalhes do erro SMTP:\n{traceback.format_exc()}")
-            # Tentar novamente sem SSL/TLS
-            try:
-                logger.info("Tentando enviar sem SSL/TLS...")
-                current_app.config['MAIL_USE_SSL'] = False
-                current_app.config['MAIL_USE_TLS'] = False
-                with mail.connect() as conn:
-                    conn.send(msg)
-                    logger.info("Email enviado com sucesso sem SSL/TLS!")
-            except Exception as retry_error:
-                logger.error(f"Erro na segunda tentativa: {str(retry_error)}")
-                logger.error(f"Detalhes do erro: {traceback.format_exc()}")
-                raise retry_error
+        # Tentar enviar email com diferentes configurações
+        logger.info("\nIniciando tentativas de envio de email...")
+        try_smtp_connection(current_app._get_current_object(), msg, logger)
         
     except Exception as e:
         logger.error(f"\nErro ao enviar email de confirmação premium: {str(e)}")
