@@ -14,6 +14,9 @@ from threading import Thread
 import logging
 import traceback
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def markdown_to_html(text):
     """
@@ -214,6 +217,72 @@ def send_registration_confirmation_email(user):
         logger.error(f"Detalhes do erro:\n{traceback.format_exc()}")
         raise 
 
+def send_email_direct(subject, sender, recipients, text_body, html_body):
+    """Envia email diretamente via SMTP sem usar Flask-Mail"""
+    logger = logging.getLogger('email_debug')
+    logger.info("\n==== INICIANDO ENVIO DIRETO DE EMAIL ====")
+    
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = ', '.join(recipients)
+    
+    # Anexar versões texto e HTML
+    part1 = MIMEText(text_body, 'plain')
+    part2 = MIMEText(html_body, 'html')
+    msg.attach(part1)
+    msg.attach(part2)
+    
+    # Configurações do servidor
+    smtp_configs = [
+        {
+            'port': 465,
+            'use_ssl': True,
+            'use_tls': False,
+            'description': 'SSL na porta 465'
+        },
+        {
+            'port': 587,
+            'use_ssl': False,
+            'use_tls': True,
+            'description': 'TLS na porta 587'
+        }
+    ]
+    
+    last_error = None
+    for config in smtp_configs:
+        try:
+            logger.info(f"\nTentando envio com {config['description']}...")
+            
+            if config['use_ssl']:
+                smtp = smtplib.SMTP_SSL(current_app.config['MAIL_SERVER'], 
+                                      config['port'], 
+                                      timeout=30)
+            else:
+                smtp = smtplib.SMTP(current_app.config['MAIL_SERVER'], 
+                                  config['port'], 
+                                  timeout=30)
+                if config['use_tls']:
+                    smtp.starttls()
+            
+            smtp.login(current_app.config['MAIL_USERNAME'], 
+                      current_app.config['MAIL_PASSWORD'])
+            
+            smtp.send_message(msg)
+            smtp.quit()
+            
+            logger.info("Email enviado com sucesso!")
+            return True
+            
+        except Exception as e:
+            last_error = e
+            logger.error(f"Erro ao tentar {config['description']}: {str(e)}")
+            logger.error(traceback.format_exc())
+            continue
+    
+    if last_error:
+        raise last_error
+
 def send_premium_confirmation_email(user):
     try:
         logger = logging.getLogger('email_debug')
@@ -223,9 +292,6 @@ def send_premium_confirmation_email(user):
         # Verificar configurações de email
         logger.info("\nVerificando configurações de email:")
         logger.info(f"MAIL_SERVER: {current_app.config['MAIL_SERVER']}")
-        logger.info(f"MAIL_PORT: {current_app.config['MAIL_PORT']}")
-        logger.info(f"MAIL_USE_SSL: {current_app.config['MAIL_USE_SSL']}")
-        logger.info(f"MAIL_USE_TLS: {current_app.config.get('MAIL_USE_TLS', False)}")
         logger.info(f"MAIL_USERNAME: {current_app.config['MAIL_USERNAME']}")
         logger.info("MAIL_PASSWORD está definido: " + str(bool(current_app.config.get('MAIL_PASSWORD'))))
         
@@ -239,24 +305,16 @@ def send_premium_confirmation_email(user):
                                   subscription_date=datetime.now().strftime('%B %d, %Y'))
         logger.info("Templates renderizados com sucesso")
         
-        # Criar mensagem
-        logger.info("\nCriando mensagem de email...")
+        # Enviar email diretamente
+        logger.info("\nIniciando envio direto de email...")
         sender = current_app.config['ADMINS'][0]
-        logger.info(f"Remetente: {sender}")
-        logger.info(f"Destinatário: {user.email}")
-        
-        msg = Message(
+        send_email_direct(
             subject='Premium Subscription Confirmed!',
             sender=sender,
-            recipients=[user.email]
+            recipients=[user.email],
+            text_body=text_body,
+            html_body=html_body
         )
-        msg.body = text_body
-        msg.html = html_body
-        logger.info("Mensagem criada com sucesso")
-        
-        # Tentar enviar email com diferentes configurações
-        logger.info("\nIniciando tentativas de envio de email...")
-        try_smtp_connection(current_app._get_current_object(), msg, logger)
         
     except Exception as e:
         logger.error(f"\nErro ao enviar email de confirmação premium: {str(e)}")
