@@ -84,7 +84,7 @@ def preview_email():
     # Renderizar o template com o usuário de teste
     return render_template('email/registration_confirmation.html', user=test_user)
 
-@app.route('/send-test-email')
+@app.route('/test-email')
 def send_test_email():
     try:
         logger.info("==== INICIANDO TESTE DE EMAIL ====")

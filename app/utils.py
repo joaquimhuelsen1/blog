@@ -94,14 +94,31 @@ def send_async_email(app, msg):
         with app.app_context():
             logger.info("Contexto da aplicação estabelecido")
             logger.info("Tentando conectar ao servidor SMTP...")
+            logger.info(f"Configurações SMTP: {app.config['MAIL_SERVER']}:{app.config['MAIL_PORT']}")
+            logger.info(f"SSL: {app.config['MAIL_USE_SSL']}, TLS: {app.config['MAIL_USE_TLS']}")
             
             try:
-                mail.send(msg)
-                logger.info("Email enviado com sucesso!")
+                # Tentar estabelecer conexão SMTP primeiro
+                with mail.connect() as conn:
+                    logger.info("Conexão SMTP estabelecida com sucesso")
+                    logger.info("Tentando enviar email...")
+                    conn.send(msg)
+                    logger.info("Email enviado com sucesso!")
             except Exception as smtp_error:
                 logger.error(f"Erro SMTP: {str(smtp_error)}")
                 logger.error(f"Detalhes do erro SMTP: {traceback.format_exc()}")
-                raise
+                # Tentar novamente sem SSL/TLS
+                try:
+                    logger.info("Tentando enviar sem SSL/TLS...")
+                    app.config['MAIL_USE_SSL'] = False
+                    app.config['MAIL_USE_TLS'] = False
+                    with mail.connect() as conn:
+                        conn.send(msg)
+                        logger.info("Email enviado com sucesso sem SSL/TLS!")
+                except Exception as retry_error:
+                    logger.error(f"Erro na segunda tentativa: {str(retry_error)}")
+                    logger.error(f"Detalhes do erro: {traceback.format_exc()}")
+                    raise
                 
     except Exception as e:
         logger.error(f"Erro no envio assíncrono: {str(e)}")
@@ -178,7 +195,7 @@ def send_premium_confirmation_email(user):
         logger.info(f"MAIL_USE_SSL: {current_app.config['MAIL_USE_SSL']}")
         logger.info(f"MAIL_USE_TLS: {current_app.config.get('MAIL_USE_TLS', False)}")
         logger.info(f"MAIL_USERNAME: {current_app.config['MAIL_USERNAME']}")
-        logger.info(f"MAIL_PASSWORD: {'*' * 8}")
+        logger.info("MAIL_PASSWORD está definido: " + str(bool(current_app.config.get('MAIL_PASSWORD'))))
         
         # Renderizar templates
         logger.info("\nRenderizando templates de email...")
@@ -208,12 +225,27 @@ def send_premium_confirmation_email(user):
         # Enviar email
         logger.info("\nIniciando envio de email...")
         try:
-            mail.send(msg)
-            logger.info("Email enviado com sucesso!")
+            # Tentar estabelecer conexão SMTP primeiro
+            with mail.connect() as conn:
+                logger.info("Conexão SMTP estabelecida com sucesso")
+                logger.info("Tentando enviar email...")
+                conn.send(msg)
+                logger.info("Email enviado com sucesso!")
         except Exception as smtp_error:
             logger.error(f"\nErro SMTP ao enviar email: {str(smtp_error)}")
             logger.error(f"Detalhes do erro SMTP:\n{traceback.format_exc()}")
-            raise smtp_error
+            # Tentar novamente sem SSL/TLS
+            try:
+                logger.info("Tentando enviar sem SSL/TLS...")
+                current_app.config['MAIL_USE_SSL'] = False
+                current_app.config['MAIL_USE_TLS'] = False
+                with mail.connect() as conn:
+                    conn.send(msg)
+                    logger.info("Email enviado com sucesso sem SSL/TLS!")
+            except Exception as retry_error:
+                logger.error(f"Erro na segunda tentativa: {str(retry_error)}")
+                logger.error(f"Detalhes do erro: {traceback.format_exc()}")
+                raise retry_error
         
     except Exception as e:
         logger.error(f"\nErro ao enviar email de confirmação premium: {str(e)}")

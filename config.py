@@ -11,10 +11,24 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 SUPABASE_DIRECT_URL = None
 
 class Config:
-    # Configurações básicas
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'uma-chave-secreta-dificil-de-adivinhar'
+    # Configurações base compartilhadas
+    SECRET_KEY = os.environ.get('SECRET_KEY') or '7d9f83b5a12c4e67d8f92a31c5b7e9a2f4d6c8e0b3a5d7f9'
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
     
-    # Caminho absoluto para o arquivo do banco de dados
+    # Email
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'zion.servidor.net.br')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'True').lower() == 'true'
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'False').lower() == 'true'
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', 'ethanheyes@reconquestyourex.com')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    ADMINS = [MAIL_USERNAME]
+
+    # OpenAI
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    OPENAI_ASSISTANT_ID = os.environ.get('OPENAI_ASSISTANT_ID')
+    
+    # Configurações básicas
     INSTANCE_PATH = os.path.join(basedir, 'instance')
     if not os.path.exists(INSTANCE_PATH):
         os.makedirs(INSTANCE_PATH)
@@ -93,27 +107,7 @@ class Config:
             raise ValueError(error_msg)
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
-    
-    # Configurações da API OpenAI
-    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-    OPENAI_ASSISTANT_ID = os.environ.get('OPENAI_ASSISTANT_ID')
-    
-    # Configurações de Email (para implementação futura)
-    MAIL_SERVER = os.environ.get('MAIL_SERVER')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
-    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    ADMINS = [os.environ.get('MAIL_USERNAME', 'ethanheyes@reconquestyourex.com')]
     
     # Configurações de Debug
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    TESTING = False
-    
-    # Configurações da Stripe
-    STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY')
-    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
-    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
-    STRIPE_PREMIUM_PRICE_ID = os.environ.get('STRIPE_PREMIUM_PRICE_ID') 
+    TESTING = False 
