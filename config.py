@@ -110,4 +110,10 @@ class Config:
     
     # Configurações de Debug
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    TESTING = False 
+    TESTING = False
+    
+    # Configurações da Stripe
+    STRIPE_PUBLIC_KEY = os.environ.get('STRIPE_PUBLIC_KEY')
+    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+    STRIPE_PREMIUM_PRICE_ID = os.environ.get('STRIPE_PREMIUM_PRICE_ID') 

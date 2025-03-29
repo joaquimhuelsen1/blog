@@ -457,6 +457,7 @@ def create_app():
             from app.routes.temporary import temp_bp
             from app.routes.ai_chat import ai_chat_bp
             
+            # Registrar todos os blueprints, incluindo o main_bp
             app.register_blueprint(main_bp)
             app.register_blueprint(auth_bp, url_prefix='/auth')
             app.register_blueprint(admin_bp, url_prefix='/admin')

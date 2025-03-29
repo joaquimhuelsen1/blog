@@ -1,0 +1,29 @@
+Premium Subscription Confirmed!
+
+Dear {{ user.username }},
+
+Thank you for upgrading to our Premium subscription! We're excited to have you as a premium member.
+
+🎉 Your Premium Status is Now Active! 🎉
+
+Subscription Details:
+- Username: {{ user.username }}
+- Email: {{ user.email }}
+- Status: Premium Member
+- Subscription Date: {{ subscription_date }}
+
+As a premium member, you now have access to:
+- ✅ Exclusive content and articles
+- ✅ Advanced relationship strategies
+- ✅ Premium coaching materials
+- ✅ Priority support
+
+You can access your premium content at: {{ url_for('main.index', _external=True) }}
+
+If you have any questions about your premium subscription or need assistance, please don't hesitate to contact us.
+
+Best regards,
+Ethan Heyes
+
+---
+This is an automated message, please do not reply to this email. 

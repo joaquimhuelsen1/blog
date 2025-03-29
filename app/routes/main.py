@@ -3,6 +3,7 @@ from flask_login import current_user
 from app import db
 from app.models import User, Post, Comment
 from app.forms import CommentForm, ChatMessageForm
+from app.utils import send_premium_confirmation_email
 import os
 import requests
 import json
@@ -289,4 +290,39 @@ def enviar_teste():
 @main_bp.route('/premium')
 def premium_subscription():
     """Página para mostrar informações sobre a assinatura premium"""
-    return render_template('public/premium.html') 
+    return render_template('public/premium.html')
+
+@main_bp.route('/api/send-premium-email', methods=['POST'])
+def send_premium_email():
+    """Rota para enviar email de confirmação premium"""
+    try:
+        logger.info("==== INICIANDO ENVIO DE EMAIL PREMIUM ====")
+        data = request.get_json()
+        
+        if not data or 'email' not in data:
+            logger.error("Email não fornecido na requisição")
+            return jsonify({'error': 'Email is required'}), 400
+            
+        # Buscar usuário pelo email
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            logger.error(f"Usuário não encontrado para o email: {data['email']}")
+            return jsonify({'error': 'User not found'}), 404
+            
+        # Enviar email
+        logger.info(f"Enviando email premium para: {user.email}")
+        send_premium_confirmation_email(user)
+        logger.info("Email enviado com sucesso!")
+        
+        return jsonify({
+            'message': 'Premium confirmation email sent successfully',
+            'user': {
+                'username': user.username,
+                'email': user.email
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error sending premium confirmation email: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500 

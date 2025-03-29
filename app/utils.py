@@ -13,6 +13,7 @@ from app import mail
 from threading import Thread
 import logging
 import traceback
+from datetime import datetime
 
 def markdown_to_html(text):
     """
@@ -161,5 +162,60 @@ def send_registration_confirmation_email(user):
         
     except Exception as e:
         logger.error(f"\nErro ao enviar email de registro: {str(e)}")
+        logger.error(f"Detalhes do erro:\n{traceback.format_exc()}")
+        raise 
+
+def send_premium_confirmation_email(user):
+    try:
+        logger = logging.getLogger('email_debug')
+        logger.info("\n==== INICIANDO ENVIO DE EMAIL DE CONFIRMAÇÃO PREMIUM ====")
+        logger.info(f"Usuário: {user.username} ({user.email})")
+        
+        # Verificar configurações de email
+        logger.info("\nVerificando configurações de email:")
+        logger.info(f"MAIL_SERVER: {current_app.config['MAIL_SERVER']}")
+        logger.info(f"MAIL_PORT: {current_app.config['MAIL_PORT']}")
+        logger.info(f"MAIL_USE_SSL: {current_app.config['MAIL_USE_SSL']}")
+        logger.info(f"MAIL_USE_TLS: {current_app.config.get('MAIL_USE_TLS', False)}")
+        logger.info(f"MAIL_USERNAME: {current_app.config['MAIL_USERNAME']}")
+        logger.info(f"MAIL_PASSWORD: {'*' * 8}")
+        
+        # Renderizar templates
+        logger.info("\nRenderizando templates de email...")
+        text_body = render_template('email/premium_confirmation.txt', 
+                                  user=user,
+                                  subscription_date=datetime.now().strftime('%B %d, %Y'))
+        html_body = render_template('email/premium_confirmation.html', 
+                                  user=user,
+                                  subscription_date=datetime.now().strftime('%B %d, %Y'))
+        logger.info("Templates renderizados com sucesso")
+        
+        # Criar mensagem
+        logger.info("\nCriando mensagem de email...")
+        sender = current_app.config['ADMINS'][0]
+        logger.info(f"Remetente: {sender}")
+        logger.info(f"Destinatário: {user.email}")
+        
+        msg = Message(
+            subject='Premium Subscription Confirmed!',
+            sender=sender,
+            recipients=[user.email]
+        )
+        msg.body = text_body
+        msg.html = html_body
+        logger.info("Mensagem criada com sucesso")
+        
+        # Enviar email
+        logger.info("\nIniciando envio de email...")
+        try:
+            mail.send(msg)
+            logger.info("Email enviado com sucesso!")
+        except Exception as smtp_error:
+            logger.error(f"\nErro SMTP ao enviar email: {str(smtp_error)}")
+            logger.error(f"Detalhes do erro SMTP:\n{traceback.format_exc()}")
+            raise smtp_error
+        
+    except Exception as e:
+        logger.error(f"\nErro ao enviar email de confirmação premium: {str(e)}")
         logger.error(f"Detalhes do erro:\n{traceback.format_exc()}")
         raise 

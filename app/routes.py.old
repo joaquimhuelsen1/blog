@@ -13,7 +13,7 @@ import requests
 import json
 import markdown
 from markdown.extensions import fenced_code, tables, nl2br
-from app.utils import upload_image_to_supabase, send_registration_confirmation_email
+from app.utils import upload_image_to_supabase, send_registration_confirmation_email, send_premium_confirmation_email
 import logging
 import traceback
 from datetime import datetime, timedelta
@@ -23,6 +23,7 @@ from flask_wtf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
 from flask_mail import Message
 from threading import Thread
+import stripe
 
 # Configurar logging
 logging.basicConfig(
@@ -209,6 +210,35 @@ def test_email():
         logger.error(f"Detalhes do erro: {traceback.format_exc()}")
         flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
         return redirect(url_for('main.index'))
+
+@main_bp.route('/api/send-premium-email', methods=['POST'])
+def send_premium_email():
+    try:
+        data = request.get_json()
+        
+        if not data or 'email' not in data:
+            return jsonify({'error': 'Email is required'}), 400
+            
+        # Buscar usuário pelo email
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        # Enviar email
+        send_premium_confirmation_email(user)
+        
+        return jsonify({
+            'message': 'Premium confirmation email sent successfully',
+            'user': {
+                'username': user.username,
+                'email': user.email
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error sending premium confirmation email: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 # Rotas de autenticação (auth_bp)
 @auth_bp.route('/login', methods=['GET', 'POST'])
@@ -521,8 +551,8 @@ def upgrade():
     if current_user.is_premium:
         flash('Você já é um usuário premium!', 'info')
         return redirect(url_for('main.index'))
-        
-    return render_template('user/upgrade.html')
+    
+    return render_template('public/premium.html')
 
 # Rotas temporárias (temp_bp)
 SECRET_TOKEN = os.environ.get('ADMIN_CREATE_TOKEN') or secrets.token_hex(16)
@@ -693,4 +723,104 @@ def limpar_chat():
         return jsonify({
             'success': False,
             'error': f"Erro ao limpar chat: {str(e)}"
-        }) 
+        })
+
+# Configuração da Stripe
+stripe.api_key = current_app.config.get('STRIPE_SECRET_KEY')
+logger.info(f"Stripe API Key configurada: {stripe.api_key is not None}")
+
+@user_bp.route('/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    try:
+        event = None
+        payload = request.data
+        sig_header = request.headers.get('Stripe-Signature')
+        
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, current_app.config.get('STRIPE_WEBHOOK_SECRET')
+            )
+        except ValueError as e:
+            logger.error(f"Erro no webhook - Payload inválido: {str(e)}")
+            return jsonify({'error': 'Invalid payload'}), 400
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Erro no webhook - Assinatura inválida: {str(e)}")
+            return jsonify({'error': 'Invalid signature'}), 400
+
+        # Lidar com o evento
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            
+            # Obter o ID do usuário do metadata
+            user_id = session.get('client_reference_id')
+            if not user_id:
+                logger.error("ID do usuário não encontrado na sessão")
+                return jsonify({'error': 'User ID not found'}), 400
+
+            # Atualizar o status do usuário para premium
+            user = User.query.get(user_id)
+            if user:
+                user.is_premium = True
+                db.session.commit()
+                logger.info(f"Usuário {user.id} atualizado para premium")
+            else:
+                logger.error(f"Usuário não encontrado: {user_id}")
+                return jsonify({'error': 'User not found'}), 404
+
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        logger.error(f"Erro no webhook: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@user_bp.route('/create-checkout-session', methods=['POST'])
+@login_required
+def create_checkout_session():
+    try:
+        logger.info("Iniciando checkout...")
+        logger.info(f"Stripe API Key: {stripe.api_key}")
+        
+        if not stripe.api_key:
+            logger.error("Stripe API Key não configurada")
+            return jsonify({'error': 'Stripe API Key não configurada'}), 500
+            
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'unit_amount': 2000,  # $20.00
+                    'product_data': {
+                        'name': 'Premium Subscription',
+                        'description': 'Monthly premium subscription to Blog Reconquista',
+                    },
+                },
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=url_for('user.premium_success', _external=True),
+            cancel_url=url_for('user.premium_cancel', _external=True),
+            client_reference_id=str(current_user.id),
+        )
+        
+        logger.info("Sessão de checkout criada com sucesso")
+        logger.info(f"Session ID: {checkout_session.id}")
+        return jsonify({'id': checkout_session.id})
+        
+    except Exception as e:
+        logger.error(f"Erro ao criar sessão de checkout: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 403
+
+@user_bp.route('/premium-success')
+@login_required
+def premium_success():
+    flash('Thank you for subscribing! Your premium access has been activated.', 'success')
+    return redirect(url_for('main.index'))
+
+@user_bp.route('/premium-cancel')
+@login_required
+def premium_cancel():
+    flash('Your subscription was cancelled. You can try again whenever you want.', 'info')
+    return redirect(url_for('user.upgrade')) 
