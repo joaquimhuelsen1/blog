@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Gerenciar Usuários - Blog Reconquista{% endblock %}
+{% block title %}Users - Admin Dashboard{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
@@ -8,89 +8,57 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h4 class="m-0">Gerenciamento de Usuários</h4>
-                </div>
-                <div class="card-body">
-                    {% if users %}
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nome de Usuário</th>
-                                    <th>Email</th>
-                                    <th>Idade</th>
-                                    <th>Tipo</th>
-                                    <th>Data de Registro</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in users %}
-                                <tr>
-                                    <td>{{ user.id }}</td>
-                                    <td>{{ user.username }}</td>
-                                    <td>{{ user.email }}</td>
-                                    <td>{{ user.age or 'N/A' }}</td>
-                                    <td>
-                                        {% if user.is_admin %}
-                                        <span class="badge bg-danger">Administrador</span>
-                                        {% elif user.is_premium %}
-                                        <span class="badge bg-warning text-dark">Premium</span>
-                                        {% else %}
-                                        <span class="badge bg-secondary">Regular</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ user.created_at.strftime('%m/%d/%Y') }}</td>
-                                    <td>
-                                        <div class="btn-group">
-                                            <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-sm btn-primary">
-                                                <i class="fas fa-edit"></i> Editar
-                                            </a>
-                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ user.id }}">
-                                                <i class="fas fa-trash"></i> Excluir
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Modal de Confirmação de Exclusão -->
-                                        <div class="modal fade" id="deleteModal{{ user.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ user.id }}" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="deleteModalLabel{{ user.id }}">Confirmar Exclusão</h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <p>Você tem certeza que deseja excluir o usuário <strong>{{ user.username }}</strong>?</p>
-                                                        <p class="text-danger">Esta ação não pode ser desfeita e excluirá todos os posts e comentários deste usuário!</p>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                        <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST">
-                                                            <button type="submit" class="btn btn-danger">Excluir Permanentemente</button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="alert alert-info">
-                        Nenhum usuário encontrado.
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+    <h2>Users</h2>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-user me-2"></i>
+                            {{ user.username }}
+                            {% if user.is_admin %}
+                            <span class="badge bg-danger ms-2">Admin</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.is_premium %}
+                        <span class="badge bg-warning">Premium</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Free</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            {% if not user.is_admin %}
+                            <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this user?');">
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}

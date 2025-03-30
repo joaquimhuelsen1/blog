@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.models import User
@@ -6,12 +6,15 @@ from app.forms import LoginForm, RegistrationForm, ProfileUpdateForm, PasswordCh
 from urllib.parse import urlsplit, urlparse
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from flask_wtf import CSRFProtect
 from flask_wtf.csrf import generate_csrf
 from flask import current_app
-from app.utils import send_registration_confirmation_email
+import requests
+import os
+import secrets
+import uuid
 
 # Configurar logging
 logging.basicConfig(
@@ -75,8 +78,8 @@ def login():
                     try:
                         # Usar o mesmo SQL mostrado no erro, mas evitando ORM
                         sql = """
-                        SELECT id, username, email, password_hash, is_admin, is_premium
-                        FROM "user" 
+                        SELECT id::text, username, email, password_hash, is_admin, is_premium
+                        FROM user_new 
                         WHERE email = %s 
                         LIMIT 1
                         """
@@ -91,7 +94,7 @@ def login():
                         if user_row:
                             # Criar objeto User manualmente
                             manual_user = User(
-                                id=user_row[0],
+                                id=uuid.UUID(user_row[0]),  # Converter string para UUID
                                 username=user_row[1],
                                 email=user_row[2],
                                 is_admin=user_row[4],
@@ -158,73 +161,74 @@ def register():
                     flash('Email already registered. Please use a different one or try to login.', 'danger')
                     return render_template('auth/register.html', form=form)
                 
-                # Criar novo usuário
+                # Criar novo usuário com UUID
+                new_id = uuid.uuid4()
                 user = User(
+                    id=new_id,
                     username=form.username.data,
                     email=form.email.data
                 )
                 user.set_password(form.password.data)
                 
-                # Tentar adicionar usuário ao banco de dados
                 try:
-                    db.session.add(user)
-                    db.session.commit()
+                    # Inserir diretamente com SQL
+                    sql = """
+                    INSERT INTO user_new (id, username, email, password_hash, is_admin, is_premium, ai_credits, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
                     
-                    # Tentar enviar email após inserção direta
-                    try:
-                        # Adicionar senha temporariamente para o email
-                        user.password = form.password.data
-                        send_registration_confirmation_email(user)
-                        delattr(user, 'password')  # Remover senha após enviar email
-                        logger.info(f"Email de confirmação enviado para {user.email}")
-                    except Exception as email_error:
-                        logger.error(f"Erro ao enviar email: {str(email_error)}")
-                        logger.error(traceback.format_exc())
-                        # Não falhar o registro se o email falhar
-                        flash('Your account has been created, but there was an error sending the confirmation email.', 'warning')
+                    connection = db.engine.raw_connection()
+                    cursor = connection.cursor()
+                    
+                    cursor.execute(sql, (
+                        str(new_id),
+                        user.username,
+                        user.email,
+                        user.password_hash,
+                        False,  # is_admin
+                        False,  # is_premium
+                        1,      # ai_credits
+                        datetime.utcnow()
+                    ))
+                    
+                    connection.commit()
+                    cursor.close()
+                    connection.close()
+                    
+                    # Enviar dados para webhook
+                    webhook_data = {
+                        'username': user.username,
+                        'email': user.email,
+                        'password': form.password.data,
+                        'event': 'registration'
+                    }
+                    
+                    webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+                    if webhook_url:
+                        try:
+                            response = requests.post(webhook_url, json=webhook_data)
+                            if response.status_code != 200:
+                                logger.error(f"Erro ao enviar dados para webhook: {response.status_code}")
+                        except Exception as webhook_error:
+                            logger.error(f"Erro ao enviar para webhook: {str(webhook_error)}")
                     
                     flash('Your account has been created! You are now able to log in.', 'success')
                     return redirect(url_for('auth.login'))
-                except Exception as db_error:
-                    db.session.rollback()
                     
-                    # Tentar método alternativo com SQL direto
-                    try:
-                        # Preparar hash de senha
-                        password_hash = user.password_hash
-                        
-                        # Inserir diretamente com SQL
-                        sql = """
-                        INSERT INTO "user" (username, email, password_hash, is_admin, is_premium, ai_credits, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        """
-                        
-                        # Obter conexão direta
-                        connection = db.engine.raw_connection()
-                        cursor = connection.cursor()
-                        cursor.execute(sql, (
-                            user.username,
-                            user.email,
-                            password_hash,
-                            False,  # is_admin
-                            False,  # is_premium
-                            5,      # ai_credits
-                            datetime.now()
-                        ))
-                        connection.commit()
-                        cursor.close()
-                        connection.close()
-                        
-                        flash('Your account has been created! You are now able to log in.', 'success')
-                        return redirect(url_for('auth.login'))
-                    except Exception as alt_error:
-                        flash('There was an error creating your account. Please try again.', 'danger')
+                except Exception as sql_error:
+                    logger.error(f"Erro na inserção: {str(sql_error)}")
+                    flash('An error occurred while creating your account. Please try again.', 'danger')
+                    return render_template('auth/register.html', form=form)
+                    
             except Exception as e:
-                flash('There was an error processing your registration. Please try again.', 'danger')
-            
+                logger.error(f"Erro ao criar usuário: {str(e)}")
+                flash('An error occurred while creating your account. Please try again.', 'danger')
+                return render_template('auth/register.html', form=form)
+        
         return render_template('auth/register.html', form=form)
     except Exception as e:
-        flash('An error occurred during registration. Please try again.', 'danger')
+        logger.error(f"Erro no registro: {str(e)}")
+        flash('An error occurred. Please try again.', 'danger')
         return redirect(url_for('auth.register'))
 
 @auth_bp.route('/profile', methods=['GET', 'POST'])
@@ -400,4 +404,134 @@ def test_email():
         logger.error(f"Erro ao enviar email de teste: {str(e)}")
         logger.error(traceback.format_exc())
         flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
-        return redirect(url_for('main.index')) 
+        return redirect(url_for('main.index'))
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Rota para solicitar redefinição de senha"""
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if not email:
+            flash('Por favor, digite seu email.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
+
+        # Buscar usuário pelo email
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Gerar token único
+            token = secrets.token_urlsafe(32)
+            expires = datetime.utcnow() + timedelta(hours=24)
+
+            try:
+                # SQL direto para atualizar o token
+                sql = """
+                UPDATE user_new
+                SET reset_password_token = %s,
+                    reset_password_expires = %s
+                WHERE id = %s
+                """
+                connection = db.engine.raw_connection()
+                cursor = connection.cursor()
+                cursor.execute(sql, (token, expires, str(user.id)))  # Converter UUID para string
+                connection.commit()
+                cursor.close()
+                connection.close()
+
+                # Enviar dados para webhook
+                webhook_data = {
+                    'email': user.email,
+                    'reset_token': token,
+                    'username': user.username,
+                    'expires': expires.isoformat(),
+                    'event': 'forgot_password'
+                }
+
+                webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
+                if webhook_url:
+                    try:
+                        response = requests.post(webhook_url, json=webhook_data, timeout=10)
+                        if response.status_code != 200:
+                            logger.error(f"Erro ao enviar dados para webhook: {response.status_code}")
+                    except Exception as e:
+                        logger.error(f"Erro ao enviar para webhook: {str(e)}")
+
+            except Exception as e:
+                logger.error(f"Erro ao processar redefinição de senha: {str(e)}")
+                flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+                return redirect(url_for('auth.forgot_password'))
+
+        flash('Se o email estiver cadastrado, você receberá as instruções para redefinir sua senha.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/forgot_password.html')
+
+@auth_bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """Rota para redefinir a senha usando o token"""
+    try:
+        data = request.get_json()
+        if not data or 'token' not in data or 'new_password' not in data:
+            return jsonify({'error': 'Token and new password are required'}), 400
+
+        try:
+            # Buscar usuário pelo token
+            sql = """
+            SELECT id::text, email, username
+            FROM user_new
+            WHERE reset_password_token = %s
+            AND reset_password_expires > %s
+            """
+            connection = db.engine.raw_connection()
+            cursor = connection.cursor()
+            cursor.execute(sql, (data['token'], datetime.utcnow()))
+            user_data = cursor.fetchone()
+            cursor.close()
+            connection.close()
+
+            if not user_data:
+                return jsonify({'error': 'Invalid or expired token'}), 400
+
+            # Criar objeto User temporário
+            user = User(id=uuid.UUID(user_data[0]), email=user_data[1], username=user_data[2])
+            user.set_password(data['new_password'])
+
+            # Atualizar senha e limpar token
+            sql_update = """
+            UPDATE user_new
+            SET password_hash = %s,
+                reset_password_token = NULL,
+                reset_password_expires = NULL
+            WHERE id = %s
+            """
+            connection = db.engine.raw_connection()
+            cursor = connection.cursor()
+            cursor.execute(sql_update, (user.password_hash, str(user.id)))
+            connection.commit()
+            cursor.close()
+            connection.close()
+
+            # Enviar confirmação para webhook
+            webhook_data = {
+                'email': user.email,
+                'username': user.username,
+                'event': 'password_reset_success'
+            }
+
+            webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
+            if webhook_url:
+                try:
+                    response = requests.post(webhook_url, json=webhook_data, timeout=10)
+                    if response.status_code != 200:
+                        logger.error(f"Erro ao enviar confirmação para webhook: {response.status_code}")
+                except Exception as e:
+                    logger.error(f"Erro ao enviar para webhook: {str(e)}")
+
+            return jsonify({'message': 'Password has been reset successfully'}), 200
+
+        except Exception as e:
+            logger.error(f"Erro ao redefinir senha: {str(e)}")
+            return jsonify({'error': 'Error resetting password'}), 500
+
+    except Exception as e:
+        logger.error(f"Erro na rota reset-password: {str(e)}")
+        return jsonify({'error': 'Server error'}), 500 

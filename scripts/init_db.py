@@ -2,6 +2,7 @@ from app import create_app, db
 from config import Config
 import os
 from datetime import datetime, timedelta
+import uuid
 
 def init_db():
     app = create_app(Config)
@@ -50,27 +51,30 @@ def init_db():
         premium.set_password('premium123')
         db.session.add(premium)
         
+        # Commit para gerar os IDs dos usuários
+        db.session.commit()
+        
         # Criando alguns posts de exemplo
         print("Criando posts de exemplo...")
         
         post1 = Post(
-            title="Como reconquistar uma ex-namorada",
-            summary="Dicas práticas para reconquistar sua ex de forma eficaz e genuína.",
+            title="Como Superar um Término de Relacionamento",
+            summary="Dicas práticas e eficazes para lidar com o fim de um relacionamento e seguir em frente.",
             content="""
-                <h2>Como reconquistar uma ex-namorada</h2>
-                <p>A primeira coisa a entender é que reconquistar alguém exige mudança real e autêntica, não apenas técnicas manipulativas.</p>
-                <h3>Passo 1: Dê espaço e tempo</h3>
-                <p>Antes de qualquer tentativa de reconciliação, é crucial dar espaço para que ambos processem suas emoções. Evite contato constante logo após o término.</p>
-                <h3>Passo 2: Trabalhe em si mesmo</h3>
-                <p>Use este tempo para refletir sobre os problemas que levaram ao término. Trabalhe em melhorar aspectos da sua personalidade que podem ter contribuído para os problemas no relacionamento.</p>
-                <h3>Passo 3: Restabeleça contato de forma gradual</h3>
-                <p>Quando sentir que ambos tiveram tempo suficiente, inicie contato de forma casual e amigável. Não pressione por reconciliação imediata.</p>
-                <p>Lembre-se: o objetivo é reconstruir confiança e criar uma conexão nova e melhorada, não apenas voltar ao que era antes.</p>
+                <h2>Como Superar um Término de Relacionamento</h2>
+                <p>O fim de um relacionamento pode ser uma das experiências mais dolorosas que enfrentamos. No entanto, existem maneiras de transformar essa dor em crescimento pessoal.</p>
+                <h3>1. Permita-se Sentir</h3>
+                <p>Não reprima suas emoções. É normal sentir tristeza, raiva e confusão. Permita-se vivenciar esses sentimentos como parte do processo de cura.</p>
+                <h3>2. Mantenha-se Ocupado</h3>
+                <p>Encontre atividades que te interessam e mantenham sua mente focada em seu crescimento pessoal. Aprenda algo novo, pratique exercícios ou dedique-se a um hobby.</p>
+                <h3>3. Busque Apoio</h3>
+                <p>Não hesite em buscar apoio de amigos, familiares ou profissionais. Compartilhar seus sentimentos pode ser terapêutico e ajudar no processo de cura.</p>
+                <p>Lembre-se: cada término é uma oportunidade de recomeço e autoconhecimento.</p>
             """,
-            image_url="https://images.unsplash.com/photo-1529333166437-7750a6dd5a70?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8NHx8cmVsYXRpb25zaGlwfGVufDB8fDB8fA%3D%3D&auto=format&fit=crop&w=800&q=60",
-            premium_only=False,
+            image_url="https://images.unsplash.com/photo-1516534775068-ba3e7458af70?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8YnJva2VuJTIwaGVhcnR8ZW58MHx8MHx8&auto=format&fit=crop&w=800&q=60",
+            premium_only=True,
             author=admin,
-            created_at=datetime.utcnow() - timedelta(days=2)
+            created_at=datetime.utcnow() - timedelta(days=7)
         )
         db.session.add(post1)
         
@@ -95,68 +99,8 @@ def init_db():
         )
         db.session.add(post2)
         
-        post3 = Post(
-            title="Estratégias avançadas de reconquista - Técnicas exclusivas",
-            summary="Métodos premium e exclusivos para aumentar drasticamente suas chances de reconquista.",
-            content="""
-                <h2>Estratégias avançadas de reconquista</h2>
-                <p>As técnicas neste artigo vão além das abordagens básicas e representam estratégias mais sofisticadas e direcionadas.</p>
-                <h3>Estratégia 1: A Técnica da Transformação Visível</h3>
-                <p>Esta técnica envolve criar uma narrativa clara de transformação pessoal que seja visível para sua ex-parceira. Não se trata apenas de melhorar, mas de comunicar essa melhoria de forma estratégica.</p>
-                <h3>Estratégia 2: O Princípio da Escassez Calibrada</h3>
-                <p>A escassez calibrada envolve dosar sua disponibilidade de forma estratégica para aumentar seu valor percebido. Esta técnica deve ser aplicada cuidadosamente para não parecer manipulativa.</p>
-                <h3>Estratégia 3: Recontextualização do Relacionamento</h3>
-                <p>Esta técnica avançada envolve criar novos contextos para interação que não carregam a bagagem emocional do relacionamento anterior. O objetivo é construir novas memórias positivas em ambientes neutros.</p>
-                <p>Estas estratégias requerem autoconhecimento significativo e inteligência emocional avançada. Aplique-as com intenção genuína de crescimento e melhoria, não apenas para manipular sentimentos.</p>
-            """,
-            image_url="https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8MjB8fHJlbGF0aW9uc2hpcHxlbnwwfHwwfHw%3D&auto=format&fit=crop&w=800&q=60",
-            premium_only=True,
-            author=admin,
-            created_at=datetime.utcnow() - timedelta(days=1)
-        )
-        db.session.add(post3)
-        
-        post4 = Post(
-            title="Psicologia feminina: entendendo as necessidades emocionais",
-            summary="Entenda as necessidades emocionais fundamentais das mulheres nos relacionamentos.",
-            content="""
-                <h2>Psicologia feminina: entendendo as necessidades emocionais</h2>
-                <p>Entender as necessidades emocionais femininas é crucial para construir relacionamentos saudáveis e duradouros.</p>
-                <h3>1. Comunicação significativa</h3>
-                <p>Para muitas mulheres, a comunicação vai além de trocar informações - é uma forma de construir intimidade e conexão. Conversas significativas sobre sentimentos e experiências são essenciais.</p>
-                <h3>2. Segurança emocional</h3>
-                <p>Criar um ambiente onde ela possa expressar suas vulnerabilidades sem julgamento é fundamental. Muitas mulheres valorizam um parceiro que oferece estabilidade emocional e apoio.</p>
-                <h3>3. Presença atenta</h3>
-                <p>Estar verdadeiramente presente nas interações, sem distrações, demonstra que você valoriza o tempo com ela. Ouvir atentamente e lembrar detalhes importantes mostra consideração.</p>
-                <p>Lembre-se que cada mulher é única e estas são apenas diretrizes gerais. A melhor abordagem é sempre comunicar-se abertamente e aprender sobre as necessidades específicas da sua parceira.</p>
-            """,
-            image_url="https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8MjB8fHJlbGF0aW9uc2hpcHxlbnwwfHwwfHw%3D&auto=format&fit=crop&w=800&q=60",
-            premium_only=False,
-            author=admin,
-            created_at=datetime.utcnow() - timedelta(days=7)
-        )
-        db.session.add(post4)
-        
-        post5 = Post(
-            title="Técnicas de comunicação persuasiva para reconquista - Premium",
-            summary="Aprenda técnicas avançadas de comunicação para aumentar seu poder de persuasão e reconquista.",
-            content="""
-                <h2>Técnicas de comunicação persuasiva para reconquista</h2>
-                <p>A persuasão eficaz é uma habilidade que pode ser aprendida e aperfeiçoada. Este artigo premium revela técnicas avançadas de comunicação raramente discutidas.</p>
-                <h3>Técnica 1: Framing Emocional</h3>
-                <p>O framing emocional envolve enquadrar conversas e situações de forma a evocar emoções específicas que favorecem a reconexão. Esta técnica permite que você guie a experiência emocional de forma sutil.</p>
-                <h3>Técnica 2: Storytelling Estratégico</h3>
-                <p>Histórias bem construídas ativam o cérebro de formas que argumentos lógicos não conseguem. Aprenda a criar narrativas que estabelecem conexão emocional e comunicam transformação de forma poderosa.</p>
-                <h3>Técnica 3: Comunicação Não-Verbal Calibrada</h3>
-                <p>Mais de 65% da comunicação é não-verbal. Esta seção cobre técnicas avançadas de postura, microexpressões e controle vocal que aumentam significativamente sua presença e atratividade.</p>
-                <p>Estas técnicas são poderosas e devem ser utilizadas com integridade e respeito. O objetivo é criar comunicação autêntica e significativa, não manipulação.</p>
-            """,
-            image_url="https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8NXx8Y29tbXVuaWNhdGlvbnxlbnwwfHwwfHw%3D&auto=format&fit=crop&w=800&q=60",
-            premium_only=True,
-            author=admin,
-            created_at=datetime.utcnow() - timedelta(days=3)
-        )
-        db.session.add(post5)
+        # Commit para gerar os IDs dos posts
+        db.session.commit()
         
         # Adicionando alguns comentários de exemplo
         print("Criando comentários de exemplo...")
@@ -179,25 +123,7 @@ def init_db():
         )
         db.session.add(comment2)
         
-        comment3 = Comment(
-            content="Este artigo mudou completamente minha perspectiva. Consegui identificar vários erros que cometi no passado.",
-            author=premium,
-            post=post3,
-            approved=True,
-            created_at=datetime.utcnow() - timedelta(hours=14)
-        )
-        db.session.add(comment3)
-        
-        comment4 = Comment(
-            content="Interessante, mas acho que algumas destas técnicas podem ser consideradas manipulativas.",
-            author=user,
-            post=post5,
-            approved=False,  # Comentário pendente de aprovação
-            created_at=datetime.utcnow() - timedelta(hours=8)
-        )
-        db.session.add(comment4)
-        
-        # Commit das alterações no banco de dados
+        # Commit final
         db.session.commit()
         
         print("Banco de dados inicializado com sucesso!")

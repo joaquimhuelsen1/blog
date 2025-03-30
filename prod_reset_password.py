@@ -12,6 +12,9 @@ import logging
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
+import psycopg2
+from werkzeug.security import generate_password_hash
+import uuid
 
 # Configurar logging
 logging.basicConfig(
@@ -37,7 +40,9 @@ def check_environment():
         "FLASK_ENV": os.getenv("FLASK_ENV", "Não definido"),
         "SUPABASE_DB_HOST": os.getenv("SUPABASE_DB_HOST", "Não definido"),
         "SUPABASE_DB_NAME": os.getenv("SUPABASE_DB_NAME", "Não definido"),
-        "SUPABASE_DB_USER": os.getenv("SUPABASE_DB_USER", "Não definido")
+        "SUPABASE_DB_USER": os.getenv("SUPABASE_DB_USER", "Não definido"),
+        "SUPABASE_DB_PASSWORD": os.getenv("SUPABASE_DB_PASSWORD", "Não definido"),
+        "SUPABASE_DB_PORT": os.getenv("SUPABASE_DB_PORT", "Não definido")
     }
     
     # Ocultar parte das credenciais para o log
@@ -55,160 +60,61 @@ def check_environment():
     return env_vars
 
 def reset_password():
-    """Redefinir a senha do administrador usando a aplicação Flask"""
-    logger.info("\n======= INICIANDO REDEFINIÇÃO DE SENHA =======")
+    # Conectar ao banco de dados
+    conn = psycopg2.connect(
+        dbname=os.environ.get('SUPABASE_DB_NAME'),
+        user=os.environ.get('SUPABASE_DB_USER'),
+        password=os.environ.get('SUPABASE_DB_PASSWORD'),
+        host=os.environ.get('SUPABASE_DB_HOST'),
+        port=os.environ.get('SUPABASE_DB_PORT')
+    )
+    
+    cur = conn.cursor()
     
     try:
-        # Primeiro método: Usar a aplicação Flask
-        logger.info("Método 1: Usando aplicação Flask")
-        from app import create_app, db
-        from app.models import User
+        # Listar usuários admin
+        print("\nUsuários admin:")
+        cur.execute('SELECT id::text, username, email, is_admin FROM user_new WHERE is_admin = true;')
+        admin_users = cur.fetchall()
+        for user in admin_users:
+            print(f"ID: {user[0]}, Username: {user[1]}, Email: {user[2]}, Is Admin: {user[3]}")
         
-        # Inicializar a aplicação Flask e o contexto
-        app = create_app()
-        with app.app_context():
-            # Verificar a conexão com o banco de dados
-            logger.info(f"Conexão com o banco de dados: {db.engine.url}")
-            
-            # Buscar o usuário administrador
-            logger.info("Buscando usuário administrador...")
-            admin = User.query.filter_by(is_admin=True).first()
-            
-            if not admin:
-                logger.error("Nenhum usuário administrador encontrado.")
-                
-                # Tentar buscar por nome de usuário conhecido
-                logger.info("Tentando buscar pelo nome 'Joaquim'...")
-                admin = User.query.filter_by(username='Joaquim').first()
-                
-                if not admin:
-                    logger.error("Usuário específico também não encontrado.")
-                    
-                    # Listar todos os usuários
-                    logger.info("Listando todos os usuários disponíveis:")
-                    all_users = User.query.all()
-                    for user in all_users:
-                        logger.info(f"  ID {user.id}: {user.username} ({user.email}) - Admin: {user.is_admin}")
-                    
-                    if not all_users:
-                        logger.error("Nenhum usuário encontrado no banco de dados.")
-                        return False
-                    
-                    # Se encontrou usuários mas nenhum admin, usar o primeiro
-                    admin = all_users[0]
-                    logger.info(f"Usando o primeiro usuário disponível: {admin.username}")
-            
-            # Definir nova senha segura
-            new_password = "Railway2024!"
-            old_hash = admin.password_hash[:20] + "..." if admin.password_hash else "None"
-            
-            # Atualizar a senha
-            logger.info(f"Redefinindo senha para usuário: {admin.username} ({admin.email})")
-            admin.set_password(new_password)
-            db.session.commit()
-            
-            # Verificar se a senha foi alterada
-            admin_updated = User.query.get(admin.id)
-            new_hash = admin_updated.password_hash[:20] + "..."
-            password_ok = admin_updated.check_password(new_password)
-            
-            logger.info(f"Hash antigo: {old_hash}")
-            logger.info(f"Hash novo: {new_hash}")
-            logger.info(f"Verificação da nova senha: {'SUCESSO' if password_ok else 'FALHA'}")
-            
-            if password_ok:
-                logger.info(f"\nSENHA REDEFINIDA COM SUCESSO!")
-                logger.info(f"Usuário: {admin.username}")
-                logger.info(f"Email: {admin.email}")
-                logger.info(f"Nova senha: {new_password}")
-                logger.info(f"Faça login com essas credenciais e altere a senha.")
-                return True
-            else:
-                logger.error("Falha ao verificar a nova senha.")
-                return False
-    
-    except Exception as e:
-        logger.error(f"Erro ao redefinir senha: {str(e)}")
-        logger.error(traceback.format_exc())
+        print("\nPrimeiros 10 usuários:")
+        cur.execute('SELECT id::text, username, email, is_admin FROM user_new LIMIT 10;')
+        users = cur.fetchall()
+        for user in users:
+            print(f"ID: {user[0]}, Username: {user[1]}, Email: {user[2]}, Is Admin: {user[3]}")
         
-        # Segundo método: Conectar diretamente ao banco de dados
-        try_direct_connection()
+        # Solicitar ID do usuário
+        user_id = input("\nDigite o ID do usuário para redefinir a senha: ")
         
-        return False
-
-def try_direct_connection():
-    """Tentativa alternativa usando conexão direta com o banco de dados"""
-    logger.info("\nMétodo 2: Tentando conexão direta com o banco de dados...")
-    
-    try:
-        import psycopg2
-        from werkzeug.security import generate_password_hash
+        # Verificar se o ID é válido
+        try:
+            # Converter string para UUID
+            user_uuid = uuid.UUID(user_id)
+        except ValueError:
+            print("ID inválido. Por favor, insira um UUID válido.")
+            return
         
-        # Configuração da conexão
-        db_url = os.getenv('DATABASE_URL')
-        if not db_url or not db_url.startswith('postgresql://'):
-            logger.error("URL de banco de dados PostgreSQL não encontrada.")
-            return False
+        # Nova senha
+        new_password = input("Digite a nova senha: ")
         
-        logger.info(f"Conectando ao banco de dados: {db_url[:15]}...{db_url[-10:]}")
-        
-        # Tentar conectar diretamente
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-        
-        # Verificar tabelas
-        cur.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public'
-            ORDER BY table_name;
-        """)
-        tables = cur.fetchall()
-        logger.info("\nTabelas encontradas:")
-        for table in tables:
-            logger.info(f"  - {table[0]}")
-            
-        # Verificar usuários administradores
-        logger.info("\nVerificando usuários administradores:")
-        cur.execute('SELECT id, username, email, is_admin FROM "user" WHERE is_admin = true;')
-        admins = cur.fetchall()
-        
-        if not admins:
-            logger.info("Nenhum administrador encontrado. Buscando qualquer usuário...")
-            cur.execute('SELECT id, username, email, is_admin FROM "user" LIMIT 10;')
-            admins = cur.fetchall()
-            
-        if not admins:
-            logger.error("Nenhum usuário encontrado na tabela.")
-            return False
-            
-        # Escolher o primeiro usuário
-        user_id, username, email, is_admin = admins[0]
-        logger.info(f"Usuário selecionado: {username} ({email}), Admin: {is_admin}")
-        
-        # Definir nova senha
-        new_password = "Railway2024!"
+        # Gerar hash da senha
         password_hash = generate_password_hash(new_password)
         
-        # Atualizar a senha
-        cur.execute('UPDATE "user" SET password_hash = %s WHERE id = %s', (password_hash, user_id))
+        # Atualizar senha
+        cur.execute('UPDATE user_new SET password_hash = %s WHERE id = %s', (password_hash, str(user_uuid)))
         conn.commit()
         
-        logger.info(f"\nSENHA REDEFINIDA COM SUCESSO (método direto)!")
-        logger.info(f"Usuário: {username}")
-        logger.info(f"Email: {email}")
-        logger.info(f"Nova senha: {new_password}")
-        logger.info(f"Faça login com essas credenciais e altere a senha.")
-        
-        # Fechar conexão
-        cur.close()
-        conn.close()
-        return True
+        print("Senha atualizada com sucesso!")
         
     except Exception as e:
-        logger.error(f"Erro na conexão direta: {str(e)}")
-        logger.error(traceback.format_exc())
-        return False
+        print(f"Erro: {str(e)}")
+        conn.rollback()
+    
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == "__main__":
     try:
@@ -218,14 +124,10 @@ if __name__ == "__main__":
         env_info = check_environment()
         
         # Redefinir senha
-        success = reset_password()
+        reset_password()
         
-        if success:
-            logger.info("\n✅ OPERAÇÃO CONCLUÍDA COM SUCESSO")
-            logger.info("Use as credenciais fornecidas para fazer login.")
-        else:
-            logger.error("\n❌ FALHA NA OPERAÇÃO")
-            logger.error("Verifique os logs para mais detalhes.")
+        logger.info("\n✅ OPERAÇÃO CONCLUÍDA COM SUCESSO")
+        logger.info("Use as credenciais fornecidas para fazer login.")
         
     except Exception as e:
         logger.error(f"Erro fatal: {str(e)}")

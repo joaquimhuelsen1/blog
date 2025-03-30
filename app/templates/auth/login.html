@@ -30,6 +30,9 @@
                             {% for error in form.password.errors %}
                                 <small class="text-danger">{{ error }}</small>
                             {% endfor %}
+                            <div class="text-end mt-1">
+                                <a href="{{ url_for('auth.forgot_password') }}" class="text-muted small">Esqueci minha senha</a>
+                            </div>
                         </div>
                         
                         <div class="form-check mb-3">

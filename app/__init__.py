@@ -15,7 +15,6 @@ import logging
 from sqlalchemy import text
 import re
 import socket
-from flask_mail import Mail
 
 # Configurar logging
 logging.basicConfig(
@@ -32,7 +31,6 @@ logger = logging.getLogger('blog_app_init')
 db = SQLAlchemy()
 login_manager = LoginManager()
 # csrf = CSRFProtect()  # Inicializar CSRF no nível do módulo
-mail = Mail()
 
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
@@ -151,30 +149,6 @@ def create_app():
     from app.utils import markdown_to_html
     app.jinja_env.filters['markdown'] = markdown_to_html
     logger.info("Filtro markdown registrado")
-    
-    # Inicializar Flask-Mail
-    logger.info("Inicializando Flask-Mail...")
-    logger.info(f"MAIL_SERVER: {app.config['MAIL_SERVER']}")
-    logger.info(f"MAIL_PORT: {app.config['MAIL_PORT']}")
-    logger.info(f"MAIL_USE_SSL: {app.config['MAIL_USE_SSL']}")
-    logger.info(f"MAIL_USE_TLS: {app.config['MAIL_USE_TLS']}")
-    logger.info(f"MAIL_USERNAME: {app.config['MAIL_USERNAME']}")
-    logger.info(f"ADMINS: {app.config['ADMINS']}")
-    
-    # Configurar Flask-Mail com SSL
-    app.config['MAIL_USE_SSL'] = True
-    app.config['MAIL_USE_TLS'] = False
-    
-    mail.init_app(app)
-    logger.info("Flask-Mail inicializado com sucesso")
-    
-    # Configurar logger específico para email
-    email_logger = logging.getLogger('email_debug')
-    email_logger.setLevel(logging.DEBUG)
-    email_handler = logging.FileHandler('email_debug.log')
-    email_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s'))
-    email_logger.addHandler(email_handler)
-    logger.info("Logger de email configurado")
     
     # Verificar e corrigir URL para conectividade com Supabase
     if 'SQLALCHEMY_DATABASE_URI' in app.config and app.config['SQLALCHEMY_DATABASE_URI']:

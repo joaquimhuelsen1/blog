@@ -3,13 +3,13 @@ from flask_login import current_user
 from app import db
 from app.models import User, Post, Comment
 from app.forms import CommentForm, ChatMessageForm
-from app.utils import send_premium_confirmation_email
 import os
 import requests
 import json
 import traceback  # Adicionar para debug
 import logging  # Adicionar para logs
 from datetime import datetime
+from dotenv import load_dotenv
 
 # Configurar logs
 logging.basicConfig(
@@ -27,63 +27,99 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
-    """Rota para a página inicial"""
     try:
-        logger.info("==== ACESSANDO PÁGINA INICIAL ====")
-        logger.info(f"Hora da solicitação: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Hora da solicitação: {datetime.now()}")
         logger.info(f"Usuário autenticado: {current_user.is_authenticated}")
         
-        if current_user.is_authenticated:
-            logger.info(f"ID do usuário: {current_user.id}, Nome: {current_user.username}")
-        
-        # Obter parâmetros da solicitação
+        # Pegar página atual
         page = request.args.get('page', 1, type=int)
         logger.info(f"Parâmetro de página: {page}")
         
+        # Buscar posts do n8n
         try:
-            # Verificar configuração do banco de dados
-            db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'Não definido')
-            logger.info(f"String de conexão BD (parcial): {db_uri.split('@')[0].split(':')[0]}:***@{db_uri.split('@')[1] if '@' in db_uri else '(formato desconhecido)'}")
-        except Exception as db_config_err:
-            logger.error(f"Erro ao verificar config BD: {str(db_config_err)}")
+            load_dotenv(override=True)  # Força recarregar as variáveis do .env
+        except ImportError:
+            pass
+            
+        webhook_url = os.environ.get('WEBHOOK_GET_POSTS')
+        if not webhook_url:
+            logger.error("WEBHOOK_GET_POSTS não configurado no .env")
+            return render_template('public/index.html', posts=[], pagination=None)
+            
+        logger.info(f"Usando webhook URL: {webhook_url}")  # Log da URL que está sendo usada
         
-        # Verificar quantidade de posts (antes da paginação)
+        # Preparar dados para o webhook
+        webhook_data = {
+            'page': page,
+            'per_page': 5,
+            'is_premium': current_user.is_premium if current_user.is_authenticated else False
+        }
+        
+        # Fazer requisição para o webhook
         try:
-            # Remover uso de with app_context() desnecessário que pode estar causando o erro
-            total_posts = Post.query.count()
-            logger.info(f"Total de posts no banco de dados: {total_posts}")
+            response = requests.post(webhook_url, json=webhook_data, timeout=10)
+            response.raise_for_status()  # Vai lançar exceção para status codes de erro
             
-            # Consultar posts paginados
-            logger.info("Executando consulta paginada de posts...")
-            posts = Post.query.order_by(Post.created_at.desc()).paginate(page=page, per_page=5)
+            data = response.json()
+            logger.info(f"Dados recebidos do webhook: {data}")
             
-            logger.info(f"Paginação: page={posts.page}, per_page={posts.per_page}, total={posts.total}, pages={posts.pages}")
-            logger.info(f"Itens retornados: {len(posts.items)}")
+            # Estruturar os dados corretamente
+            posts_list = []
+            posts_data = data.get('posts', [])
             
-            # Renderizar template
-            logger.info("Renderizando template 'public/index.html'")
-            return render_template('public/index.html', posts=posts)
-        except Exception as query_err:
-            logger.error(f"ERRO NA CONSULTA: {str(query_err)}")
-            logger.exception("Detalhes do erro na consulta:")
-            # Tentar retornar a página sem posts
-            logger.info("Tentando renderizar o template sem posts")
-            return render_template('public/index.html', posts=None)
+            # Verifica se posts_data é um dicionário único ou uma lista
+            if isinstance(posts_data, dict):
+                posts_data = [posts_data]  # Converte para lista com um item
+            
+            # Processa cada post
+            for post in posts_data:
+                if 'created_at' in post:
+                    try:
+                        created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+                        post['created_at'] = created_dt.strftime('%m/%d/%Y')
+                    except (ValueError, AttributeError):
+                        post['created_at'] = 'Data não disponível'
+                posts_list.append(post)
+            
+            # Estrutura da paginação
+            pagination = {
+                'page': page,
+                'has_next': data.get('pagination', {}).get('has_next', False),
+                'has_prev': data.get('pagination', {}).get('has_prev', False)
+            }
+            
+            formatted_data = {
+                'posts': posts_list,
+                'pagination': pagination
+            }
+            
+            logger.info(f"Posts processados: {len(posts_list)}")
+            
+            return render_template('public/index.html', 
+                                posts=formatted_data,
+                                now=datetime.utcnow())
+                                
+        except requests.RequestException as e:
+            logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
+            return render_template('public/index.html', 
+                                posts=[], 
+                                pagination=None,
+                                now=datetime.utcnow())
             
     except Exception as e:
-        # Imprimir erro detalhado para debug
-        logger.error(f"ERRO NA RENDERIZAÇÃO DA PÁGINA INICIAL: {str(e)}")
-        logger.exception("Detalhes completos do erro:")
-        
-        # Tentar renderizar uma página mínima com informações do erro
-        return render_template('errors/500.html', error=str(e)), 500
+        logger.error(f"Erro na rota index: {str(e)}")
+        logger.error(traceback.format_exc())
+        return render_template('public/index.html', 
+                            posts=[], 
+                            pagination=None,
+                            now=datetime.utcnow())
 
-@main_bp.route('/post/<int:post_id>', methods=['GET', 'POST'])
+@main_bp.route('/post/<uuid:post_id>', methods=['GET', 'POST'])
 def post(post_id):
     post = Post.query.get_or_404(post_id)
     
     # Verificar se é o post 4 e usar a URL específica
-    if post.id == 4:
+    if str(post.id) == "4":
         post.image_url = "https://img.freepik.com/free-photo/side-view-couple-holding-each-other_23-2148735555.jpg?t=st=1742409398~exp=1742412998~hmac=59e342a62de1c61aedc5a53c00356ab4406ded130e98eca884480d2d68360910&w=900"
         db.session.commit()
     # Verificar se a imagem do post existe, caso contrário, usar placeholder
@@ -142,7 +178,7 @@ def post(post_id):
     
     return render_template('public/post.html', post=post, recent_posts=recent_posts, form=form, comments=comments)
 
-@main_bp.route('/post/<int:post_id>/comment', methods=['POST'])
+@main_bp.route('/post/<uuid:post_id>/comment', methods=['POST'])
 def add_comment(post_id):
     if not current_user.is_authenticated:
         return jsonify({'success': False, 'message': 'You need to log in to comment.'})
@@ -235,7 +271,10 @@ def enviar_teste():
             
             try:
                 # Try sending data to webhook
-                webhook_url = 'https://primary-production-eefe.up.railway.app/webhook/5d75cf8b-dbf8-4be6-afdc-25bc764cc55c'
+                webhook_url = os.environ.get('WEBHOOK_RECONQUEST_TEST')
+                if not webhook_url:
+                    logger.error("WEBHOOK_RECONQUEST_TEST não configurado no .env")
+                    return jsonify({'success': False, 'message': 'Server configuration error.'}), 500
                 
                 response = requests.post(
                     webhook_url,
@@ -289,40 +328,5 @@ def enviar_teste():
 
 @main_bp.route('/premium')
 def premium_subscription():
-    """Página para mostrar informações sobre a assinatura premium"""
-    return render_template('public/premium.html')
-
-@main_bp.route('/api/send-premium-email', methods=['POST'])
-def send_premium_email():
-    """Rota para enviar email de confirmação premium"""
-    try:
-        logger.info("==== INICIANDO ENVIO DE EMAIL PREMIUM ====")
-        data = request.get_json()
-        
-        if not data or 'email' not in data:
-            logger.error("Email não fornecido na requisição")
-            return jsonify({'error': 'Email is required'}), 400
-            
-        # Buscar usuário pelo email
-        user = User.query.filter_by(email=data['email']).first()
-        if not user:
-            logger.error(f"Usuário não encontrado para o email: {data['email']}")
-            return jsonify({'error': 'User not found'}), 404
-            
-        # Enviar email
-        logger.info(f"Enviando email premium para: {user.email}")
-        send_premium_confirmation_email(user)
-        logger.info("Email enviado com sucesso!")
-        
-        return jsonify({
-            'message': 'Premium confirmation email sent successfully',
-            'user': {
-                'username': user.username,
-                'email': user.email
-            }
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error sending premium confirmation email: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500 
+    """Render the premium subscription page."""
+    return render_template('public/premium.html') 

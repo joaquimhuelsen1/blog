@@ -15,15 +15,6 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or '7d9f83b5a12c4e67d8f92a31c5b7e9a2f4d6c8e0b3a5d7f9'
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
     
-    # Email
-    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'zion.servidor.net.br')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
-    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'True').lower() == 'true'
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'False').lower() == 'true'
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', 'ethanheyes@reconquestyourex.com')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    ADMINS = [MAIL_USERNAME]
-
     # OpenAI
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     OPENAI_ASSISTANT_ID = os.environ.get('OPENAI_ASSISTANT_ID')

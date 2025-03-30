@@ -5,6 +5,8 @@ from app.models import User, Post, Comment
 from app.forms import PostForm, UserUpdateForm
 from app.utils import upload_image_to_supabase
 from functools import wraps
+import os
+import requests
 
 # Decorador para verificar se o usuário é administrador
 def admin_required(f):
@@ -71,30 +73,50 @@ def create_post():
                     flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
                     return render_template('admin/create_post.html', form=form)
             
-            # Criar o post
-            post = Post(
-                title=form.title.data,
-                content=form.content.data,
-                summary=form.summary.data,
-                image_url=image_url or 'https://via.placeholder.com/1200x400',
-                reading_time=form.reading_time.data,
-                premium_only=form.premium_only.data,
-                author=current_user
-            )
-            
+            # Preparar dados do post para o webhook
+            post_data = {
+                'title': form.title.data,
+                'content': form.content.data,
+                'summary': form.summary.data,
+                'image_url': image_url or 'https://via.placeholder.com/1200x400',
+                'reading_time': form.reading_time.data,
+                'premium_only': form.premium_only.data,
+                'author_id': str(current_user.id),
+                'author_username': current_user.username
+            }
+
             if form.created_at.data:
-                post.created_at = form.created_at.data
+                post_data['created_at'] = form.created_at.data.isoformat()
             
-            db.session.add(post)
-            db.session.commit()
+            # Enviar para o webhook do N8N
+            webhook_url = os.environ.get('WEBHOOK_CREATE_POST')
+            if not webhook_url:
+                flash('URL do webhook não configurada', 'danger')
+                return render_template('admin/create_post.html', form=form)
+
+            response = requests.post(
+                webhook_url,
+                json=post_data,
+                timeout=10
+            )
+            response.raise_for_status()  # Vai lançar exceção para status codes de erro
             
-            flash('Post criado com sucesso!', 'success')
-            return redirect(url_for('admin.dashboard'))
+            # Verificar resposta do webhook
+            response_data = response.json()
+            if response_data.get('response') == 'success':
+                flash('Post criado com sucesso!', 'success')
+                return redirect(url_for('admin.dashboard'))
+            else:
+                flash('Erro ao criar post: Resposta inválida do webhook', 'danger')
+                return render_template('admin/create_post.html', form=form)
             
+        except requests.RequestException as e:
+            flash(f'Erro ao criar post via webhook: {str(e)}', 'danger')
+            return render_template('admin/create_post.html', form=form)
         except Exception as e:
-            db.session.rollback()
             flash(f'Erro ao criar post: {str(e)}', 'danger')
             print(f"ERRO ao criar post: {str(e)}")
+            return render_template('admin/create_post.html', form=form)
     
     return render_template('admin/create_post.html', form=form)
 
@@ -140,7 +162,7 @@ def edit_post(post_id):
     
     return render_template('admin/edit_post.html', form=form, post=post)
 
-@admin_bp.route('/post/delete/<int:post_id>', methods=['POST'])
+@admin_bp.route('/post/delete/<uuid:post_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_post(post_id):
@@ -170,7 +192,7 @@ def pending_comments():
     
     return render_template('admin/comments.html', comments=comments, pending_count=pending_count)
 
-@admin_bp.route('/comment/approve/<int:comment_id>', methods=['POST'])
+@admin_bp.route('/comment/approve/<uuid:comment_id>', methods=['POST'])
 @login_required
 @admin_required
 def approve_comment(comment_id):
@@ -180,7 +202,7 @@ def approve_comment(comment_id):
     flash('Comment approved successfully!', 'success')
     return redirect(url_for('admin.pending_comments'))
 
-@admin_bp.route('/comment/delete/<int:comment_id>', methods=['POST'])
+@admin_bp.route('/comment/delete/<uuid:comment_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_comment(comment_id):
@@ -197,63 +219,51 @@ def manage_users():
     users = User.query.order_by(User.username).all()
     return render_template('admin/users.html', users=users)
 
-@admin_bp.route('/user/edit/<int:user_id>', methods=['GET', 'POST'])
+@admin_bp.route('/user/edit/<uuid:user_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
-    form = UserUpdateForm()
+    form = UserUpdateForm(obj=user)
     
-    if request.method == 'POST':
-        if 'submit' in request.form:
-            # Extrair e validar dados
-            username = request.form.get('username')
-            email = request.form.get('email')
-            age = request.form.get('age')
-            is_premium = 'is_premium' in request.form
-            is_admin = 'is_admin' in request.form
-            
-            # Verificar disponibilidade de username e email
-            username_exists = User.query.filter(User.username == username, User.id != user_id).first()
-            email_exists = User.query.filter(User.email == email, User.id != user_id).first()
-            
-            if username_exists:
-                flash('This username is already in use.', 'danger')
-            elif email_exists:
-                flash('This email is already in use.', 'danger')
-            else:
-                # Atualizar o usuário
-                user.username = username
-                user.email = email
-                user.age = int(age) if age else None
-                user.is_premium = is_premium
-                user.is_admin = is_admin
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.age = form.age.data
+        user.is_premium = form.is_premium.data
+        user.is_admin = form.is_admin.data
                 
-                db.session.commit()
-                flash(f'User {user.username} updated successfully!', 'success')
-                return redirect(url_for('admin.manage_users'))
-    
-    # Preencher o formulário com os dados do usuário
-    form.username.data = user.username
-    form.email.data = user.email
-    form.age.data = user.age
-    form.is_premium.data = user.is_premium
-    form.is_admin.data = user.is_admin
+        db.session.commit()
+        flash('User updated successfully!', 'success')
+        return redirect(url_for('admin.manage_users'))
     
     return render_template('admin/edit_user.html', form=form, user=user)
 
-@admin_bp.route('/user/delete/<int:user_id>', methods=['POST'])
+@admin_bp.route('/user/delete/<uuid:user_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_user(user_id):
     if current_user.id == user_id:
-        flash('You cannot delete your own account.', 'danger')
+        flash('You cannot delete your own account!', 'danger')
         return redirect(url_for('admin.manage_users'))
         
     user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    flash(f'User {user.username} has been deleted successfully.', 'success')
+    
+    try:
+        # Delete user's comments
+        Comment.query.filter_by(user_id=user_id).delete()
+        
+        # Delete user's posts
+        Post.query.filter_by(user_id=user_id).delete()
+        
+        # Delete the user
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {str(e)}', 'danger')
+    
     return redirect(url_for('admin.manage_users'))
 
 # Rota alternativa para compatibilidade com o template

@@ -2,17 +2,23 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import db, login_manager
+import uuid
+from sqlalchemy.dialects.postgresql import UUID
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), index=True, unique=True)
-    email = db.Column(db.String(120), index=True, unique=True)
+    __tablename__ = 'user_new'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username = db.Column(db.String(64), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     age = db.Column(db.Integer, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
     is_premium = db.Column(db.Boolean, default=False)
     ai_credits = db.Column(db.Integer, default=1)  # 1 crédito para usuários normais
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reset_password_token = db.Column(db.String(100))
+    reset_password_expires = db.Column(db.DateTime)
     posts = db.relationship('Post', backref='author', lazy='dynamic')
     comments = db.relationship('Comment', backref='author', lazy='dynamic')
 
@@ -54,19 +60,10 @@ class User(UserMixin, db.Model):
         print(f"[DEBUG] Sem créditos disponíveis para {self.username}")
         return False  # Sem créditos disponíveis
 
-class Comment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    approved = db.Column(db.Boolean, default=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=False)
-
-    def __repr__(self):
-        return f'<Comment {self.id} by {self.author.username}>'
-
 class Post(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'post_new'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = db.Column(db.String(100))
     content = db.Column(db.Text)
     summary = db.Column(db.String(200))
@@ -75,7 +72,7 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     reading_time = db.Column(db.Integer, nullable=True)  # Tempo de leitura em minutos (editável)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user_new.id'))
     comments = db.relationship('Comment', backref='post', lazy='dynamic')
 
     def __repr__(self):
@@ -104,15 +101,28 @@ class Post(db.Model):
         
         return reading_time_minutes
 
+class Comment(db.Model):
+    __tablename__ = 'comment_new'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    approved = db.Column(db.Boolean, default=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user_new.id'), nullable=False)
+    post_id = db.Column(UUID(as_uuid=True), db.ForeignKey('post_new.id'), nullable=False)
+
+    def __repr__(self):
+        return f'<Comment {self.id} by {self.author.username}>'
+
 @login_manager.user_loader
 def load_user(id):
     try:
-        return User.query.get(int(id))
+        return User.query.get(uuid.UUID(id))
     except Exception as e:
         # Se ocorrer um erro, tente reverter a transação e tentar novamente
         try:
             db.session.rollback()
-            return User.query.get(int(id))
+            return User.query.get(uuid.UUID(id))
         except:
             # Se ainda falhar, retorne None para que o Flask-Login saiba que não há usuário
             return None 
