@@ -20,11 +20,5 @@ app.wsgi_app = ProxyFix(
     x_prefix=1    # X-Forwarded-Prefix
 )
 
-# Garantir que a aplicação está no contexto correto
-with app.app_context():
-    # Inicializar extensões e configurações que precisam do contexto
-    from app.extensions import db
-    db.init_app(app)
-
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)

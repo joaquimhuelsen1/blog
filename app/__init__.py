@@ -27,10 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger('blog_app_init')
 
-# Inicializar objetos
-db = SQLAlchemy()
-login_manager = LoginManager()
-# csrf = CSRFProtect()  # Inicializar CSRF no nível do módulo
+# Importar extensões
+from app.extensions import db, login_manager
 
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
