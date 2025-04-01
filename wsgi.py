@@ -20,5 +20,8 @@ app.wsgi_app = ProxyFix(
     x_prefix=1    # X-Forwarded-Prefix
 )
 
+# Expor a aplicação como 'application' para o Gunicorn
+application = app
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8000)
