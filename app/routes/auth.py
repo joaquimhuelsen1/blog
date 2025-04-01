@@ -238,14 +238,22 @@ def register_email_only():
         email = request.form.get('email')
         if not email:
             flash('Por favor, digite seu email.', 'danger')
-            return redirect(url_for('auth.register_email_only'))
+            return render_template('auth/register_email.html')
 
         try:
+            # Definir URL de redirecionamento baseado no ambiente
+            if 'localhost' in request.host or '192.168' in request.host:
+                redirect_url = f"http://{request.host}/auth/create-password#access_token="
+                logger.info(f"Ambiente local detectado, usando URL: {redirect_url}")
+            else:
+                redirect_url = "https://reconquestyourex.com/auth/create-password#access_token="
+                logger.info(f"Ambiente de produção detectado, usando URL: {redirect_url}")
+
             # Enviar dados para webhook
             webhook_data = {
                 'email': email,
                 'event': 'register_email',
-                'redirectTo': request.host_url.rstrip('/') + url_for('auth.create_password')
+                'redirectTo': redirect_url  # Supabase vai adicionar o token aqui
             }
 
             webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
@@ -263,18 +271,18 @@ def register_email_only():
             logger.info(f"Resposta: {response.text}")
 
             if response.status_code == 200:
-                flash('Enviamos um link mágico para seu email. Por favor, verifique sua caixa de entrada.', 'success')
-                return redirect(url_for('auth.login'))
+                flash('Enviamos um link de confirmação para seu email. Por favor, verifique sua caixa de entrada e spam.', 'success')
+                return render_template('auth/register_email.html', email_sent=True, email=email)
             else:
                 logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
                 flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
-                return redirect(url_for('auth.register_email_only'))
+                return render_template('auth/register_email.html')
 
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             logger.error(traceback.format_exc())
             flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
-            return redirect(url_for('auth.register_email_only'))
+            return render_template('auth/register_email.html')
 
     return render_template('auth/register_email.html')
 
@@ -655,11 +663,16 @@ def register_email():
 
 @auth_bp.route('/create-password', methods=['GET', 'POST'])
 def create_password():
-    """Rota para criar senha após autenticação com magic link"""
-    token = request.args.get('token')
+    """Rota para criar senha após autenticação com magic link do Supabase"""
+    # Tentar pegar o token do query string
+    token = request.args.get('access_token')
+    
     if not token:
-        flash('Token de autenticação não encontrado.', 'danger')
-        return redirect(url_for('auth.register_email'))
+        logger.error("Token não encontrado na URL")
+        flash('Token de autenticação não encontrado. Por favor, use o link enviado por email.', 'danger')
+        return redirect(url_for('auth.register_email_only'))
+
+    logger.info(f"Token recebido do Supabase: {token[:10]}...")  # Log apenas dos primeiros 10 caracteres
 
     if request.method == 'POST':
         password = request.form.get('password')
@@ -667,11 +680,11 @@ def create_password():
 
         if not password or not confirm_password:
             flash('Por favor, preencha todos os campos.', 'danger')
-            return render_template('auth/create_password.html', token=token)
+            return render_template('auth/create_password.html')
 
         if password != confirm_password:
             flash('As senhas não coincidem.', 'danger')
-            return render_template('auth/create_password.html', token=token)
+            return render_template('auth/create_password.html')
 
         try:
             # Enviar dados para webhook
@@ -698,10 +711,12 @@ def create_password():
             else:
                 logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
                 flash('Erro ao criar senha. Tente novamente.', 'danger')
-                return render_template('auth/create_password.html', token=token)
+                return render_template('auth/create_password.html')
 
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             logger.error(traceback.format_exc())
             flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
-            return render_template('auth/create_password.html', token=token) 
+            return render_template('auth/create_password.html')
+
+    return render_template('auth/create_password.html') 
