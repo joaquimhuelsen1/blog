@@ -9,7 +9,7 @@
     <hr class="my-4">
     <p>Learn the best strategies to improve your relationships and win the woman of your dreams.</p>
     {% if not current_user.is_authenticated %}
-    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}" role="button">Register</a>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register_email_only') }}" role="button">Register</a>
     {% elif not current_user.is_premium %}
     <div class="alert alert-info">
         <p>You are accessing our free version. To access exclusive content, become a premium user!</p>
