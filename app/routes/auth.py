@@ -231,6 +231,53 @@ def register():
         flash('An error occurred. Please try again.', 'danger')
         return redirect(url_for('auth.register'))
 
+@auth_bp.route('/register-email-only', methods=['GET', 'POST'])
+def register_email_only():
+    """Rota para registro apenas com email usando magic link"""
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if not email:
+            flash('Por favor, digite seu email.', 'danger')
+            return redirect(url_for('auth.register_email_only'))
+
+        try:
+            # Enviar dados para webhook
+            webhook_data = {
+                'email': email,
+                'event': 'register_email',
+                'redirectTo': request.host_url.rstrip('/') + url_for('auth.create_password')
+            }
+
+            webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+            logger.info(f"Enviando para webhook: {webhook_url}")
+            logger.info(f"Dados: {webhook_data}")
+
+            response = requests.post(
+                webhook_url,
+                json=webhook_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            logger.info(f"Status: {response.status_code}")
+            logger.info(f"Resposta: {response.text}")
+
+            if response.status_code == 200:
+                flash('Enviamos um link mágico para seu email. Por favor, verifique sua caixa de entrada.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
+                flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+                return redirect(url_for('auth.register_email_only'))
+
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            logger.error(traceback.format_exc())
+            flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+            return redirect(url_for('auth.register_email_only'))
+
+    return render_template('auth/register_email.html')
+
 @auth_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
@@ -410,68 +457,81 @@ def test_email():
 def forgot_password():
     """Rota para solicitar redefinição de senha"""
     if request.method == 'POST':
+        # Log de todas as variáveis de ambiente
+        logger.info("=== DEBUG VARIÁVEIS DE AMBIENTE ===")
+        for key in os.environ:
+            if 'WEBHOOK' in key:
+                logger.info(f"{key}: {os.environ[key]}")
+        logger.info("=================================")
+        
+        # Tentar obter a URL do webhook de várias formas
+        webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
+        logger.info(f"URL do webhook do .env: {webhook_url}")
+        
+        # Verificar se a variável existe e tem conteúdo
+        if not webhook_url:
+            logger.error("WEBHOOK_PASSWORD_RESET não está definido no .env")
+            webhook_url = "https://backend.reconquestyourex.com/webhook-test/password-reset"  # Fallback
+            logger.info(f"Usando URL de fallback: {webhook_url}")
+        
         email = request.form.get('email')
         if not email:
             flash('Por favor, digite seu email.', 'danger')
             return redirect(url_for('auth.forgot_password'))
 
-        # Buscar usuário pelo email
-        user = User.query.filter_by(email=email).first()
-        if user:
-            # Gerar token único
-            token = secrets.token_urlsafe(32)
-            expires = datetime.utcnow() + timedelta(hours=24)
+        try:
+            # Enviar dados para webhook
+            webhook_data = {
+                'email': email,
+                'event': 'forgot_password'
+            }
 
-            try:
-                # SQL direto para atualizar o token
-                sql = """
-                UPDATE user_new
-                SET reset_password_token = %s,
-                    reset_password_expires = %s
-                WHERE id = %s
-                """
-                connection = db.engine.raw_connection()
-                cursor = connection.cursor()
-                cursor.execute(sql, (token, expires, str(user.id)))  # Converter UUID para string
-                connection.commit()
-                cursor.close()
-                connection.close()
+            logger.info(f"Enviando requisição para: {webhook_url}")
+            logger.info(f"Dados: {webhook_data}")
 
-                # Enviar dados para webhook
-                webhook_data = {
-                    'email': user.email,
-                    'reset_token': token,
-                    'username': user.username,
-                    'expires': expires.isoformat(),
-                    'event': 'forgot_password'
-                }
+            response = requests.post(
+                webhook_url.strip(),  # Remover possíveis espaços em branco
+                json=webhook_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            logger.info(f"Status: {response.status_code}")
+            logger.info(f"Resposta: {response.text}")
 
-                webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
-                if webhook_url:
-                    try:
-                        response = requests.post(webhook_url, json=webhook_data, timeout=10)
-                        if response.status_code != 200:
-                            logger.error(f"Erro ao enviar dados para webhook: {response.status_code}")
-                    except Exception as e:
-                        logger.error(f"Erro ao enviar para webhook: {str(e)}")
-
-            except Exception as e:
-                logger.error(f"Erro ao processar redefinição de senha: {str(e)}")
+            if response.status_code == 200:
+                flash('Se o email estiver cadastrado, você receberá as instruções para redefinir sua senha.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
                 flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
                 return redirect(url_for('auth.forgot_password'))
 
-        flash('Se o email estiver cadastrado, você receberá as instruções para redefinir sua senha.', 'success')
-        return redirect(url_for('auth.login'))
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            logger.error(traceback.format_exc())
+            flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
 
     return render_template('auth/forgot_password.html')
 
-@auth_bp.route('/reset-password', methods=['POST'])
+@auth_bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
     """Rota para redefinir a senha usando o token"""
+    if request.method == 'GET':
+        token = request.args.get('token')
+        if not token:
+            flash('Token de redefinição de senha inválido.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
+        return render_template('auth/reset_password.html', token=token)
+        
     try:
-        data = request.get_json()
-        if not data or 'token' not in data or 'new_password' not in data:
-            return jsonify({'error': 'Token and new password are required'}), 400
+        token = request.form.get('token')
+        new_password = request.form.get('new_password')
+        
+        if not token or not new_password:
+            flash('Token e nova senha são obrigatórios.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
 
         try:
             # Buscar usuário pelo token
@@ -483,17 +543,18 @@ def reset_password():
             """
             connection = db.engine.raw_connection()
             cursor = connection.cursor()
-            cursor.execute(sql, (data['token'], datetime.utcnow()))
+            cursor.execute(sql, (token, datetime.utcnow()))
             user_data = cursor.fetchone()
             cursor.close()
             connection.close()
 
             if not user_data:
-                return jsonify({'error': 'Invalid or expired token'}), 400
+                flash('Token inválido ou expirado.', 'danger')
+                return redirect(url_for('auth.forgot_password'))
 
             # Criar objeto User temporário
             user = User(id=uuid.UUID(user_data[0]), email=user_data[1], username=user_data[2])
-            user.set_password(data['new_password'])
+            user.set_password(new_password)
 
             # Atualizar senha e limpar token
             sql_update = """
@@ -510,28 +571,137 @@ def reset_password():
             cursor.close()
             connection.close()
 
-            # Enviar confirmação para webhook
+            # Enviar confirmação para webhook do n8n
             webhook_data = {
                 'email': user.email,
                 'username': user.username,
                 'event': 'password_reset_success'
             }
 
-            webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
-            if webhook_url:
+            webhook_url = os.environ.get('N8N_WEBHOOK_URL')
+            webhook_auth = os.environ.get('N8N_WEBHOOK_AUTH')
+            
+            if webhook_url and webhook_auth:
                 try:
-                    response = requests.post(webhook_url, json=webhook_data, timeout=10)
+                    headers = {
+                        'Authorization': f'Bearer {webhook_auth}',
+                        'Content-Type': 'application/json'
+                    }
+                    response = requests.post(webhook_url, json=webhook_data, headers=headers, timeout=10)
                     if response.status_code != 200:
-                        logger.error(f"Erro ao enviar confirmação para webhook: {response.status_code}")
+                        logger.error(f"Erro ao enviar confirmação para webhook n8n: {response.status_code}")
                 except Exception as e:
-                    logger.error(f"Erro ao enviar para webhook: {str(e)}")
+                    logger.error(f"Erro ao enviar para webhook n8n: {str(e)}")
 
-            return jsonify({'message': 'Password has been reset successfully'}), 200
+            flash('Sua senha foi redefinida com sucesso! Você pode fazer login agora.', 'success')
+            return redirect(url_for('auth.login'))
 
         except Exception as e:
             logger.error(f"Erro ao redefinir senha: {str(e)}")
-            return jsonify({'error': 'Error resetting password'}), 500
+            flash('Erro ao redefinir sua senha. Tente novamente.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
 
     except Exception as e:
         logger.error(f"Erro na rota reset-password: {str(e)}")
-        return jsonify({'error': 'Server error'}), 500 
+        flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+
+@auth_bp.route('/register-email', methods=['GET', 'POST'])
+def register_email():
+    """Rota inicial para registro de usuário com magic link"""
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if not email:
+            flash('Por favor, digite seu email.', 'danger')
+            return redirect(url_for('auth.register_email'))
+
+        try:
+            # Enviar dados para webhook
+            webhook_data = {
+                'email': email,
+                'event': 'register_email',
+                'redirectTo': request.host_url.rstrip('/') + url_for('auth.create_password')
+            }
+
+            webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+            logger.info(f"Enviando para webhook: {webhook_url}")
+            logger.info(f"Dados: {webhook_data}")
+
+            response = requests.post(
+                webhook_url,
+                json=webhook_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            logger.info(f"Status: {response.status_code}")
+            logger.info(f"Resposta: {response.text}")
+
+            if response.status_code == 200:
+                flash('Enviamos um link mágico para seu email. Por favor, verifique sua caixa de entrada.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
+                flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+                return redirect(url_for('auth.register_email'))
+
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            logger.error(traceback.format_exc())
+            flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+            return redirect(url_for('auth.register_email'))
+
+    return render_template('auth/register_email.html')
+
+@auth_bp.route('/create-password', methods=['GET', 'POST'])
+def create_password():
+    """Rota para criar senha após autenticação com magic link"""
+    token = request.args.get('token')
+    if not token:
+        flash('Token de autenticação não encontrado.', 'danger')
+        return redirect(url_for('auth.register_email'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not password or not confirm_password:
+            flash('Por favor, preencha todos os campos.', 'danger')
+            return render_template('auth/create_password.html', token=token)
+
+        if password != confirm_password:
+            flash('As senhas não coincidem.', 'danger')
+            return render_template('auth/create_password.html', token=token)
+
+        try:
+            # Enviar dados para webhook
+            webhook_data = {
+                'token': token,
+                'password': password,
+                'event': 'create_password'
+            }
+
+            webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+            logger.info(f"Enviando para webhook: {webhook_url}")
+            logger.info(f"Dados: {webhook_data}")
+
+            response = requests.post(
+                webhook_url,
+                json=webhook_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                flash('Senha criada com sucesso! Você já pode fazer login.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
+                flash('Erro ao criar senha. Tente novamente.', 'danger')
+                return render_template('auth/create_password.html', token=token)
+
+        except Exception as e:
+            logger.error(f"Erro: {str(e)}")
+            logger.error(traceback.format_exc())
+            flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+            return render_template('auth/create_password.html', token=token) 

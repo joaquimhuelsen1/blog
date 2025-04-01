@@ -13,6 +13,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide flash messages after 3 seconds
     setupFlashMessages();
 
+    // Improve mobile menu transition
+    const navbarToggler = document.querySelector('.navbar-toggler');
+    const navbarCollapse = document.querySelector('.navbar-collapse');
+    
+    if (navbarToggler && navbarCollapse) {
+        navbarToggler.addEventListener('click', function() {
+            // Remove transition temporarily if menu is not visible
+            if (!navbarCollapse.classList.contains('show')) {
+                navbarCollapse.style.transition = 'none';
+                navbarCollapse.style.display = 'block';
+                
+                // Force reflow
+                navbarCollapse.offsetHeight;
+                
+                // Re-enable transition
+                navbarCollapse.style.transition = 'all 0.2s ease-out';
+            }
+        });
+        
+        // Ensure proper cleanup after transition
+        navbarCollapse.addEventListener('transitionend', function() {
+            if (!navbarCollapse.classList.contains('show')) {
+                navbarCollapse.style.display = '';
+            }
+        });
+    }
+
     // Apply color palette to specific elements
     
     // 1. Convert all warning badges to primary style

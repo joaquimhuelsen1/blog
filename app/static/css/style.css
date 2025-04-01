@@ -236,7 +236,7 @@ article a:hover {
 
 /* Título principal da página inicial - v2 */
 .welcome-title {
-    font-size: 3.5rem !important;
+    font-size: 3rem !important;
     font-weight: 600 !important;
     color: var(--primary-color) !important;
     margin-bottom: 1.5rem !important;

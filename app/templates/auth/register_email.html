@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Registro - Reconquest Blog{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header text-center" style="background-color: #F1F1F1;">
+                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">Criar Conta</h4>
+                </div>
+                <div class="card-body">
+                    {% include '_messages.html' %}
+                    
+                    <form method="POST" action="{{ url_for('auth.register_email_only') }}">
+                        <div class="form-group mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <small class="form-text text-muted">Você receberá um link mágico para criar sua senha.</small>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Enviar Link Mágico</button>
+                            <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">Voltar para Login</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
