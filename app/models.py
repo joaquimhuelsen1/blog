@@ -4,27 +4,40 @@ from flask_login import UserMixin
 from app import db, login_manager
 import uuid
 from sqlalchemy.dialects.postgresql import UUID
+from flask import session
 
-class User(UserMixin, db.Model):
-    __tablename__ = 'user_new'
-    
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    username = db.Column(db.String(64), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
-    age = db.Column(db.Integer, nullable=True)
-    is_admin = db.Column(db.Boolean, default=False)
-    is_premium = db.Column(db.Boolean, default=False)
-    ai_credits = db.Column(db.Integer, default=1)  # 1 crédito para usuários normais
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    reset_password_token = db.Column(db.String(100))
-    reset_password_expires = db.Column(db.DateTime)
-    posts = db.relationship('Post', backref='author', lazy='dynamic')
-    comments = db.relationship('Comment', backref='author', lazy='dynamic')
+class User(UserMixin):
+    def __init__(self, id=None, username=None, email=None, is_admin=False, is_premium=False, age=None, ai_credits=0):
+        self.id = id
+        self.username = username
+        self.email = email
+        self.is_admin = is_admin
+        self.is_premium = is_premium
+        self.age = age
+        self.ai_credits = ai_credits
 
     def __repr__(self):
         return f'<User {self.username}>'
-    
+
+    def get_id(self):
+        """Retorna o ID do usuário como string"""
+        return str(self.id)
+
+    @property
+    def is_authenticated(self):
+        """Retorna True se o usuário está autenticado"""
+        return True
+
+    @property
+    def is_active(self):
+        """Retorna True se o usuário está ativo"""
+        return True
+
+    @property
+    def is_anonymous(self):
+        """Retorna False pois temos apenas usuários autenticados"""
+        return False
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
     
@@ -117,12 +130,18 @@ class Comment(db.Model):
 @login_manager.user_loader
 def load_user(id):
     try:
-        return User.query.get(uuid.UUID(id))
+        # Tentar carregar os dados do usuário da sessão
+        user_data = session.get('user_data')
+        if user_data and str(user_data.get('id')) == str(id):
+            return User(
+                id=user_data.get('id'),
+                username=user_data.get('username'),
+                email=user_data.get('email'),
+                is_admin=user_data.get('is_admin', False),
+                is_premium=user_data.get('is_premium', False),
+                age=user_data.get('age'),
+                ai_credits=user_data.get('ai_credits', 0)
+            )
+        return None
     except Exception as e:
-        # Se ocorrer um erro, tente reverter a transação e tentar novamente
-        try:
-            db.session.rollback()
-            return User.query.get(uuid.UUID(id))
-        except:
-            # Se ainda falhar, retorne None para que o Flask-Login saiba que não há usuário
-            return None 
+        return None 

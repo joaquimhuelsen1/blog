@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_required, current_user
 from app import db
 from app.models import User, Post, Comment
@@ -7,6 +7,20 @@ from app.utils import upload_image_to_supabase
 from functools import wraps
 import os
 import requests
+import logging
+from datetime import datetime
+from dateutil import parser
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.FileHandler("admin_debug.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger('admin_debug')
 
 # Decorador para verificar se o usuário é administrador
 def admin_required(f):
@@ -25,35 +39,251 @@ admin_bp = Blueprint('admin', __name__)
 @login_required
 @admin_required
 def dashboard():
-    posts = Post.query.order_by(Post.created_at.desc()).limit(10).all()
-    pending_count = Comment.query.filter_by(approved=False).count()
-    
-    # Estatísticas para o dashboard
-    stats = {
-        'posts_count': Post.query.count(),
-        'premium_posts_count': Post.query.filter_by(premium_only=True).count(),
-        'users_count': User.query.count(),
-        'premium_users_count': User.query.filter_by(is_premium=True).count()
-    }
-    
-    return render_template('admin/dashboard.html', posts=posts, pending_count=pending_count, stats=stats)
+    try:
+        print("\n=== INÍCIO DO PROCESSAMENTO DO DASHBOARD ===")
+        
+        # Buscar dados dos webhooks
+        users_webhook_url = os.environ.get('WEBHOOK_ADMIN_USER')
+        posts_webhook_url = os.environ.get('WEBHOOK_ADMIN_POST')
+        comments_webhook_url = os.environ.get('WEBHOOK_ADMIN_COMMENT')
+        
+        print(f"URLs dos webhooks:")
+        print(f"Users: {users_webhook_url}")
+        print(f"Posts: {posts_webhook_url}")
+        print(f"Comments: {comments_webhook_url}")
+
+        if not all([users_webhook_url, posts_webhook_url, comments_webhook_url]):
+            print("ERRO: Webhooks não configurados")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return render_template('admin/dashboard.html', posts=[], pending_count=0, stats={})
+
+        # Buscar dados de usuários
+        users_data = {
+            'event': 'get_users',
+            'user_id': str(current_user.id),
+            'table': 'user_new',
+            'select': '*'
+        }
+        print("\n=== BUSCANDO USUÁRIOS ===")
+        print(f"Dados enviados: {users_data}")
+        users_response = requests.post(users_webhook_url, json=users_data, timeout=10)
+        users_response.raise_for_status()
+        users_json = users_response.json()
+        print(f"Resposta do webhook de usuários: {users_json}")
+        
+        # Converter resposta de usuário único para lista se necessário
+        users = []
+        if isinstance(users_json, dict):
+            users = [users_json]
+        elif isinstance(users_json, list):
+            users = users_json
+            
+        print(f"Lista de usuários processada: {users}")
+        print(f"Total de usuários: {len(users)}")
+
+        # Buscar dados de posts
+        posts_data = {
+            'event': 'get_all_posts',
+            'user_id': str(current_user.id),
+            'table': 'post_new',
+            'select': '*'
+        }
+        print("\n=== BUSCANDO POSTS ===")
+        print(f"Dados enviados: {posts_data}")
+        posts_response = requests.post(posts_webhook_url, json=posts_data, timeout=10)
+        posts_response.raise_for_status()
+        posts_json = posts_response.json()
+        print(f"DEBUG - Resposta do webhook de posts: {posts_json}")
+        
+        # Extrair posts do formato correto (Revisado)
+        posts = []
+        if isinstance(posts_json, dict) and 'posts' in posts_json: # Verifica se é DICIONÁRIO com chave 'posts'
+            if isinstance(posts_json['posts'], list): # Garante que 'posts' contém uma lista
+                posts = posts_json['posts']
+                print(f"DEBUG - Posts extraídos da chave 'posts': {posts}")
+            else:
+                print("DEBUG - Chave 'posts' encontrada, mas não é uma lista.")
+        elif isinstance(posts_json, list): # Fallback para caso o webhook retorne uma lista direta
+             posts = posts_json
+             print("DEBUG - Resposta do webhook veio como lista direta (fallback).")
+        else:
+            print("DEBUG - Formato inesperado da resposta do webhook de posts.")
+        
+        print(f"Posts extraídos: {posts}")
+        print(f"Total de posts: {len(posts)}")
+
+        # Buscar dados de comentários
+        comments_data = {
+            'event': 'get_pending_comments',
+            'user_id': str(current_user.id),
+            'table': 'comment_new',
+            'select': '*'
+        }
+        print("\n=== BUSCANDO COMENTÁRIOS ===")
+        print(f"Dados enviados: {comments_data}")
+        comments_response = requests.post(comments_webhook_url, json=comments_data, timeout=10)
+        comments_response.raise_for_status()
+        comments_json = comments_response.json()
+        print(f"Resposta do webhook de comentários: {comments_json}")
+        
+        # Processar comentários dependendo do formato
+        comments = []
+        if isinstance(comments_json, dict):
+            if 'comments' in comments_json:
+                comments = comments_json['comments']
+            elif comments_json.get('author') or comments_json.get('post'):
+                # Se vier no formato {author: {}, post: {}}
+                if isinstance(comments_json.get('author'), dict):
+                    comments = [comments_json]
+        elif isinstance(comments_json, list):
+            comments = comments_json
+            
+        print(f"Lista de comentários processada: {comments}")
+        print(f"Total de comentários: {len(comments)}")
+
+        # Calcular estatísticas com verificação de tipo
+        stats = {
+            'posts_count': len(posts) if isinstance(posts, list) else 0,
+            'premium_posts_count': len([p for p in posts if isinstance(p, dict) and p.get('premium_only', False)]) if isinstance(posts, list) else 0,
+            'users_count': len(users) if isinstance(users, list) else 0,
+            'premium_users_count': len([u for u in users if isinstance(u, dict) and u.get('is_premium', False)]) if isinstance(users, list) else 0
+        }
+        print("\n=== ESTATÍSTICAS CALCULADAS ===")
+        print(f"Estatísticas: {stats}")
+        
+        # Preparar posts para exibição (5 mais recentes)
+        display_posts = []
+        if isinstance(posts, list):
+            # Ordenar posts por data de criação
+            sorted_posts = sorted(posts, key=lambda x: x.get('created_at', ''), reverse=True)
+            print("\n=== PROCESSANDO POSTS PARA EXIBIÇÃO ===")
+            print(f"Posts ordenados: {sorted_posts[:5]}")
+            
+            for post in sorted_posts[:5]:
+                if isinstance(post, dict):
+                    display_post = {
+                        'id': post.get('id', ''),
+                        'title': post.get('title', 'Sem título'),
+                        'premium_only': post.get('premium_only', False),
+                        'created_at': post.get('created_at', '')[:10] if post.get('created_at') else '',
+                        'author': {
+                            'username': post.get('author_username', 'Desconhecido')
+                        }
+                    }
+                    display_posts.append(display_post)
+                    print(f"Post processado: {display_post}")
+        
+        print(f"\nTotal de posts para exibição: {len(display_posts)}")
+        print(f"Posts para exibição: {display_posts}")
+        
+        # Armazenar dados na sessão para uso em outras rotas
+        session['admin_users'] = users
+        session['admin_posts'] = posts
+        session['admin_comments'] = comments
+        print("\n=== DADOS ARMAZENADOS NA SESSÃO ===")
+        
+        print("\n=== RENDERIZANDO TEMPLATE ===")
+        print(f"Posts: {len(display_posts)}")
+        print(f"Pending count: {len([c for c in comments if not c.get('approved', False)])}")
+        print(f"Stats: {stats}")
+        
+        # Renderizar template com os dados processados
+        return render_template('admin/dashboard.html', 
+                             posts=display_posts,
+                             pending_count=len([c for c in comments if not c.get('approved', False)]) if isinstance(comments, list) else 0,
+                             stats=stats)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar dados do dashboard: {str(e)}")
+        flash('Erro ao carregar dados do dashboard. Por favor, tente novamente.', 'danger')
+        return render_template('admin/dashboard.html', posts=[], pending_count=0, stats={})
+    except Exception as e:
+        logger.error(f"Erro inesperado no dashboard: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return render_template('admin/dashboard.html', posts=[], pending_count=0, stats={})
 
 @admin_bp.route('/all-posts')
 @login_required
 @admin_required
 def all_posts():
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    pending_count = Comment.query.filter_by(approved=False).count()
-    
-    # Estatísticas para o dashboard
-    stats = {
-        'posts_count': Post.query.count(),
-        'premium_posts_count': Post.query.filter_by(premium_only=True).count(),
-        'users_count': User.query.count(),
-        'premium_users_count': User.query.filter_by(is_premium=True).count()
-    }
-    
-    return render_template('admin/dashboard.html', posts=posts, pending_count=pending_count, show_all=True, stats=stats)
+    try:
+        # Tentar pegar posts da sessão primeiro
+        posts = session.get('admin_posts')
+        print(f"DEBUG - Posts da sessão: {posts}")
+        
+        if not posts:
+            # Se não estiver na sessão, buscar do webhook
+            webhook_url = os.environ.get('WEBHOOK_ADMIN_POST')
+            if not webhook_url:
+                logger.error("WEBHOOK_ADMIN_POST não configurado")
+                flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+                return render_template('admin/posts.html', posts=[])
+
+            data = {
+                'event': 'get_all_posts',
+                'user_id': str(current_user.id),
+                'table': 'post_new',
+                'select': '*'
+            }
+
+            print("DEBUG - Enviando requisição para webhook de posts")
+            response = requests.post(webhook_url, json=data, timeout=10)
+            response.raise_for_status()
+            posts_json = response.json()
+            print(f"DEBUG - Resposta do webhook de posts: {posts_json}")
+            
+            # Extrair posts do formato correto (Revisado)
+            posts = []
+            if isinstance(posts_json, dict) and 'posts' in posts_json: # Verifica se é DICIONÁRIO com chave 'posts'
+                if isinstance(posts_json['posts'], list): # Garante que 'posts' contém uma lista
+                    posts = posts_json['posts']
+                    print(f"DEBUG - Posts extraídos da chave 'posts': {posts}")
+                else:
+                    print("DEBUG - Chave 'posts' encontrada, mas não é uma lista.")
+            elif isinstance(posts_json, list): # Fallback para caso o webhook retorne uma lista direta
+                 posts = posts_json
+                 print("DEBUG - Resposta do webhook veio como lista direta (fallback).")
+            else:
+                print("DEBUG - Formato inesperado da resposta do webhook de posts.")
+            
+            # Armazenar na sessão
+            session['admin_posts'] = posts
+            print("DEBUG - Posts armazenados na sessão")
+        
+        # Processar posts para exibição
+        display_posts = []
+        if isinstance(posts, list):
+            # Ordenar posts por data de criação
+            sorted_posts = sorted(posts, key=lambda x: x.get('created_at', ''), reverse=True)
+            print(f"DEBUG - Posts ordenados: {sorted_posts}")
+            
+            for post in sorted_posts:
+                if isinstance(post, dict):
+                    display_post = {
+                        'id': post.get('id', ''),
+                        'title': post.get('title', 'Sem título'),
+                        'premium_only': post.get('premium_only', False),
+                        'created_at': post.get('created_at', '')[:10] if post.get('created_at') else '',
+                        'author': {
+                            'username': post.get('author_username', 'Desconhecido')
+                        }
+                    }
+                    display_posts.append(display_post)
+                    print(f"DEBUG - Post processado para exibição: {display_post}")
+        
+        print(f"DEBUG - Total de posts para exibição: {len(display_posts)}")
+        print(f"DEBUG - Posts para exibição: {display_posts}")
+        
+        return render_template('admin/posts.html', posts=display_posts)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar posts: {str(e)}")
+        flash('Erro ao carregar lista de posts. Por favor, tente novamente.', 'danger')
+        return render_template('admin/posts.html', posts=[])
+    except Exception as e:
+        logger.error(f"Erro inesperado ao buscar posts: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return render_template('admin/posts.html', posts=[])
 
 @admin_bp.route('/post/create', methods=['GET', 'POST'])
 @login_required
@@ -120,15 +350,106 @@ def create_post():
     
     return render_template('admin/create_post.html', form=form)
 
-@admin_bp.route('/post/edit/<int:post_id>', methods=['GET', 'POST'])
+@admin_bp.route('/post/edit/<uuid:post_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_post(post_id):
-    post = Post.query.get_or_404(post_id)
-    form = PostForm(obj=post)
-    
-    if form.validate_on_submit():
-        try:
+    try:
+        print("\n=== EDITANDO POST ===")
+        print(f"Post ID: {post_id}")
+        
+        # Buscar dados do post via webhook
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_POST')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_POST não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.all_posts'))
+
+        # Preparar dados para o webhook
+        data = {
+            'event': 'get_post',
+            'post_id': str(post_id),
+            'user_id': str(current_user.id),
+            'table': 'post_new',
+            'select': '*'
+        }
+
+        print(f"Dados enviados para webhook: {data}")
+        
+        # Fazer requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
+        
+        # Processar resposta
+        response_json = response.json()
+        print(f"Resposta do webhook: {response_json}")
+        
+        # Extrair post do formato correto (Revisado)
+        post_data = None
+        if isinstance(response_json, dict):
+            # Prioridade 1: Buscar a chave 'post' diretamente no dicionário
+            if 'post' in response_json and isinstance(response_json['post'], dict):
+                post_data = response_json['post']
+                print("Dados extraídos da chave 'post' principal.")
+            # Prioridade 2: Verificar se o próprio dicionário é o post (fallback)
+            elif 'id' in response_json:
+                post_data = response_json
+                print("Dados extraídos diretamente do dicionário principal (fallback).")
+                
+        # Prioridade 3: Verificar se é uma lista (formato antigo ou inesperado)
+        elif isinstance(response_json, list) and len(response_json) > 0:
+            first_item = response_json[0]
+            if isinstance(first_item, dict):
+                if 'post' in first_item and isinstance(first_item['post'], dict):
+                    post_data = first_item['post']
+                    print("Dados extraídos da chave 'post' dentro do primeiro item da lista.")
+                elif 'id' in first_item: 
+                    post_data = first_item
+                    print("Dados extraídos diretamente do primeiro item da lista (fallback).")
+             
+        if not post_data:
+            flash('Post não encontrado ou formato de resposta inválido.', 'danger')
+            return redirect(url_for('admin.all_posts'))
+            
+        print(f"Dados do post processados: {post_data}")
+        
+        # Converter created_at para datetime antes de criar o objeto Post
+        created_at_str = post_data.get('created_at')
+        created_at_dt = None
+        if created_at_str:
+            try:
+                # Usar dateutil.parser para lidar com o formato ISO 8601 com 'Z'
+                created_at_dt = parser.isoparse(created_at_str)
+                print(f"Data de criação convertida para datetime: {created_at_dt}")
+            except ValueError as date_err:
+                logger.error(f"Erro ao converter data de criação '{created_at_str}': {date_err}")
+                # Pode definir um valor padrão ou deixar None se a conversão falhar
+                created_at_dt = None 
+
+        # Criar objeto Post temporário usando os dados extraídos corretamente
+        post = Post(
+            id=post_data.get('id'),
+            title=post_data.get('title'),
+            content=post_data.get('content'),
+            summary=post_data.get('summary'),
+            image_url=post_data.get('image_url'),
+            premium_only=post_data.get('premium_only', False),
+            created_at=created_at_dt, # Usar o objeto datetime convertido
+            reading_time=post_data.get('reading_time')
+        )
+        
+        # Verifica se o autor está presente nos dados
+        author_data = post_data.get('author')
+        if isinstance(author_data, dict):
+            post.author = User(id=author_data.get('id'), username=author_data.get('username'))
+        else:
+            # Define um autor padrão se não vier nos dados
+            post.author = User(username='Desconhecido')
+            
+        form = PostForm(obj=post)
+        
+        if form.validate_on_submit():
+            print("\n=== ATUALIZANDO POST ===")
             # Processar upload de imagem se houver
             image_url = form.image_url.data or post.image_url
             
@@ -139,130 +460,386 @@ def edit_post(post_id):
                     flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
                     return render_template('admin/edit_post.html', form=form, post=post)
             
-            # Atualizar o post
-            post.title = form.title.data
-            post.content = form.content.data
-            post.summary = form.summary.data
-            post.image_url = image_url
-            post.reading_time = form.reading_time.data
-            post.premium_only = form.premium_only.data
+            # Preparar dados para atualização
+            update_data = {
+                'event': 'update_post',
+                'post_id': str(post_id),
+                'user_id': str(current_user.id),
+                'table': 'post_new',
+                'title': form.title.data,
+                'content': form.content.data,
+                'summary': form.summary.data,
+                'image_url': image_url,
+                'reading_time': form.reading_time.data,
+                'premium_only': form.premium_only.data,
+                'created_at': form.created_at.data.isoformat() if form.created_at.data else None
+            }
             
-            if form.created_at.data:
-                post.created_at = form.created_at.data
+            print(f"Dados de atualização: {update_data}")
             
-            db.session.commit()
+            # Enviar atualização para o webhook
+            update_response = requests.post(webhook_url, json=update_data, timeout=10)
+            update_response.raise_for_status()
             
-            flash('Post atualizado com sucesso!', 'success')
-            return redirect(url_for('admin.dashboard'))
+            response_data = update_response.json()
+            print(f"Resposta da atualização: {response_data}")
             
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Erro ao atualizar post: {str(e)}', 'danger')
-            print(f"ERRO ao atualizar post: {str(e)}")
-    
-    return render_template('admin/edit_post.html', form=form, post=post)
+            if response_data.get('status') == 'success' or response_data.get('response') == 'success':
+                flash('Post atualizado com sucesso!', 'success')
+                # Limpar a sessão para forçar recarregamento dos posts
+                session.pop('admin_posts', None)
+                return redirect(url_for('admin.all_posts'))
+            else:
+                flash('Erro ao atualizar post. Por favor, tente novamente.', 'danger')
+        
+        return render_template('admin/edit_post.html', form=form, post=post)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar/atualizar post: {str(e)}")
+        flash('Erro ao processar dados do post. Por favor, tente novamente.', 'danger')
+        return redirect(url_for('admin.all_posts'))
+    except Exception as e:
+        logger.error(f"Erro inesperado ao processar post: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return redirect(url_for('admin.all_posts'))
 
 @admin_bp.route('/post/delete/<uuid:post_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_post(post_id):
     try:
-        post = Post.query.get_or_404(post_id)
+        # Preparar dados para exclusão
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_POST')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_POST não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.all_posts'))
+
+        data = {
+            'event': 'delete_post',
+            'post_id': str(post_id),
+            'user_id': str(current_user.id)
+        }
         
-        # Remover comentários relacionados para evitar problemas de integridade
-        Comment.query.filter_by(post_id=post_id).delete()
+        # Enviar requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
         
-        # Excluir o post
-        db.session.delete(post)
-        db.session.commit()
-        flash('Post deleted successfully!', 'success')
+        response_data = response.json()
+        print(f"DEBUG - Resposta do webhook delete_post: {response_data}")
+        
+        if response_data.get('status') == 'success':
+            flash('Post excluído com sucesso!', 'success')
+            # Limpar a sessão para forçar recarregamento dos posts
+            session.pop('admin_posts', None)
+            print("DEBUG - Sessão admin_posts limpa após exclusão.")
+        else:
+            flash('Erro ao excluir post. Por favor, tente novamente.', 'danger')
+            
+    except requests.RequestException as e:
+        logger.error(f"Erro ao excluir post: {str(e)}")
+        flash('Erro ao excluir post. Por favor, tente novamente.', 'danger')
     except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting post: {str(e)}', 'danger')
-        print(f"ERRO ao excluir post {post_id}: {str(e)}")
-        
-    return redirect(url_for('admin.dashboard'))
+        logger.error(f"Erro inesperado ao excluir post: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+    
+    return redirect(url_for('admin.all_posts'))
 
 @admin_bp.route('/comments/pending')
 @login_required
 @admin_required
 def pending_comments():
-    comments = Comment.query.filter_by(approved=False).order_by(Comment.created_at.desc()).all()
-    pending_count = len(comments)
-    
-    return render_template('admin/comments.html', comments=comments, pending_count=pending_count)
+    try:
+        # Tentar pegar comentários da sessão primeiro
+        comments = session.get('admin_comments')
+        
+        if not comments:
+            # Se não estiver na sessão, buscar do webhook
+            webhook_url = os.environ.get('WEBHOOK_ADMIN_COMMENT')
+            if not webhook_url:
+                logger.error("WEBHOOK_ADMIN_COMMENT não configurado")
+                flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+                return render_template('admin/comments.html', comments=[], pending_count=0)
+
+            data = {
+                'event': 'get_pending_comments',
+                'user_id': str(current_user.id),
+                'table': 'comment_new',
+                'select': '*'
+            }
+
+            response = requests.post(webhook_url, json=data, timeout=10)
+            response.raise_for_status()
+            comments = response.json()
+            
+            # Armazenar na sessão
+            session['admin_comments'] = comments
+        
+        # Filtrar apenas comentários pendentes
+        pending_comments = [c for c in comments if not c.get('approved', False)] if isinstance(comments, list) else []
+        pending_count = len(pending_comments)
+        
+        return render_template('admin/comments.html', comments=pending_comments, pending_count=pending_count)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar comentários: {str(e)}")
+        flash('Erro ao carregar lista de comentários. Por favor, tente novamente.', 'danger')
+        return render_template('admin/comments.html', comments=[], pending_count=0)
+    except Exception as e:
+        logger.error(f"Erro inesperado ao buscar comentários: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return render_template('admin/comments.html', comments=[], pending_count=0)
 
 @admin_bp.route('/comment/approve/<uuid:comment_id>', methods=['POST'])
 @login_required
 @admin_required
 def approve_comment(comment_id):
-    comment = Comment.query.get_or_404(comment_id)
-    comment.approved = True
-    db.session.commit()
-    flash('Comment approved successfully!', 'success')
+    try:
+        # Preparar dados para aprovação
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_COMMENT')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_COMMENT não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.pending_comments'))
+
+        data = {
+            'event': 'approve_comment',
+            'comment_id': str(comment_id),
+            'user_id': str(current_user.id)
+        }
+        
+        # Enviar requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
+        
+        if response.json().get('status') == 'success':
+            flash('Comentário aprovado com sucesso!', 'success')
+        else:
+            flash('Erro ao aprovar comentário. Por favor, tente novamente.', 'danger')
+            
+    except requests.RequestException as e:
+        logger.error(f"Erro ao aprovar comentário: {str(e)}")
+        flash('Erro ao aprovar comentário. Por favor, tente novamente.', 'danger')
+    except Exception as e:
+        logger.error(f"Erro inesperado ao aprovar comentário: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+    
     return redirect(url_for('admin.pending_comments'))
 
 @admin_bp.route('/comment/delete/<uuid:comment_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_comment(comment_id):
-    comment = Comment.query.get_or_404(comment_id)
-    db.session.delete(comment)
-    db.session.commit()
-    flash('Comment deleted successfully!', 'success')
+    try:
+        # Preparar dados para exclusão
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_COMMENT')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_COMMENT não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.pending_comments'))
+
+        data = {
+            'event': 'delete_comment',
+            'comment_id': str(comment_id),
+            'user_id': str(current_user.id)
+        }
+        
+        # Enviar requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
+        
+        if response.json().get('status') == 'success':
+            flash('Comentário excluído com sucesso!', 'success')
+        else:
+            flash('Erro ao excluir comentário. Por favor, tente novamente.', 'danger')
+            
+    except requests.RequestException as e:
+        logger.error(f"Erro ao excluir comentário: {str(e)}")
+        flash('Erro ao excluir comentário. Por favor, tente novamente.', 'danger')
+    except Exception as e:
+        logger.error(f"Erro inesperado ao excluir comentário: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+    
     return redirect(url_for('admin.pending_comments'))
 
 @admin_bp.route('/users')
 @login_required
 @admin_required
 def manage_users():
-    users = User.query.order_by(User.username).all()
-    return render_template('admin/users.html', users=users)
+    try:
+        # Tentar pegar usuários da sessão primeiro
+        users = session.get('admin_users')
+        print(f"DEBUG - Usuários da sessão: {users}")
+        
+        if not users:
+            # Se não estiver na sessão, buscar do webhook
+            webhook_url = os.environ.get('WEBHOOK_ADMIN_USER')
+            if not webhook_url:
+                logger.error("WEBHOOK_ADMIN_USER não configurado")
+                flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+                return render_template('admin/users.html', users=[])
+
+            data = {
+                'event': 'get_users',
+                'user_id': str(current_user.id),
+                'table': 'user_new',
+                'select': '*'
+            }
+
+            print("DEBUG - Enviando requisição para webhook de usuários")
+            response = requests.post(webhook_url, json=data, timeout=10)
+            response.raise_for_status()
+            users_json = response.json()
+            print(f"DEBUG - Resposta do webhook de usuários: {users_json}")
+            
+            # Usuários vem como uma lista direta
+            users = users_json if isinstance(users_json, list) else []
+            print(f"DEBUG - Lista de usuários processada: {users}")
+            
+            # Armazenar na sessão
+            session['admin_users'] = users
+            print("DEBUG - Usuários armazenados na sessão")
+        
+        # Processar usuários para exibição
+        display_users = []
+        if isinstance(users, list):
+            for user in users:
+                if isinstance(user, dict):
+                    display_user = {
+                        'id': user.get('id', ''),
+                        'username': user.get('username', 'Sem nome'),
+                        'email': user.get('email', ''),
+                        'is_premium': user.get('is_premium', False),
+                        'is_admin': user.get('is_admin', False),
+                        'created_at': user.get('created_at', '')[:10] if user.get('created_at') else ''
+                    }
+                    display_users.append(display_user)
+                    print(f"DEBUG - Usuário processado para exibição: {display_user}")
+        
+        print(f"DEBUG - Total de usuários para exibição: {len(display_users)}")
+        print(f"DEBUG - Usuários para exibição: {display_users}")
+        
+        return render_template('admin/users.html', users=display_users)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar usuários: {str(e)}")
+        flash('Erro ao carregar lista de usuários. Por favor, tente novamente.', 'danger')
+        return render_template('admin/users.html', users=[])
+    except Exception as e:
+        logger.error(f"Erro inesperado ao buscar usuários: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return render_template('admin/users.html', users=[])
 
 @admin_bp.route('/user/edit/<uuid:user_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def edit_user(user_id):
-    user = User.query.get_or_404(user_id)
-    form = UserUpdateForm(obj=user)
-    
-    if form.validate_on_submit():
-        user.username = form.username.data
-        user.email = form.email.data
-        user.age = form.age.data
-        user.is_premium = form.is_premium.data
-        user.is_admin = form.is_admin.data
-                
-        db.session.commit()
-        flash('User updated successfully!', 'success')
+    try:
+        # Buscar dados do usuário via webhook
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_USER')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_USER não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.manage_users'))
+
+        # Preparar dados para o webhook
+        data = {
+            'event': 'get_user',
+            'user_id': str(user_id),
+            'admin_id': str(current_user.id)
+        }
+
+        # Fazer requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
+        
+        # Processar resposta
+        user_data = response.json()
+        
+        # Criar objeto User temporário
+        user = User(
+            id=user_data.get('id'),
+            username=user_data.get('username'),
+            email=user_data.get('email'),
+            is_admin=user_data.get('is_admin', False),
+            is_premium=user_data.get('is_premium', False),
+            age=user_data.get('age'),
+            ai_credits=user_data.get('ai_credits', 0)
+        )
+        
+        form = UserUpdateForm(obj=user)
+        
+        if form.validate_on_submit():
+            # Preparar dados para atualização
+            update_data = {
+                'event': 'update_user',
+                'user_id': str(user_id),
+                'admin_id': str(current_user.id),
+                'username': form.username.data,
+                'email': form.email.data,
+                'age': form.age.data,
+                'is_premium': form.is_premium.data,
+                'is_admin': form.is_admin.data
+            }
+            
+            # Enviar atualização para o webhook
+            update_response = requests.post(webhook_url, json=update_data, timeout=10)
+            update_response.raise_for_status()
+            
+            if update_response.json().get('status') == 'success':
+                flash('Usuário atualizado com sucesso!', 'success')
+                return redirect(url_for('admin.manage_users'))
+            else:
+                flash('Erro ao atualizar usuário. Por favor, tente novamente.', 'danger')
+        
+        return render_template('admin/edit_user.html', form=form, user=user)
+        
+    except requests.RequestException as e:
+        logger.error(f"Erro ao buscar/atualizar usuário: {str(e)}")
+        flash('Erro ao processar dados do usuário. Por favor, tente novamente.', 'danger')
         return redirect(url_for('admin.manage_users'))
-    
-    return render_template('admin/edit_user.html', form=form, user=user)
+    except Exception as e:
+        logger.error(f"Erro inesperado ao processar usuário: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        return redirect(url_for('admin.manage_users'))
 
 @admin_bp.route('/user/delete/<uuid:user_id>', methods=['POST'])
 @login_required
 @admin_required
 def delete_user(user_id):
     if current_user.id == user_id:
-        flash('You cannot delete your own account!', 'danger')
+        flash('Você não pode excluir sua própria conta!', 'danger')
         return redirect(url_for('admin.manage_users'))
         
-    user = User.query.get_or_404(user_id)
-    
     try:
-        # Delete user's comments
-        Comment.query.filter_by(user_id=user_id).delete()
+        # Preparar dados para exclusão
+        webhook_url = os.environ.get('WEBHOOK_ADMIN_USER')
+        if not webhook_url:
+            logger.error("WEBHOOK_ADMIN_USER não configurado")
+            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+            return redirect(url_for('admin.manage_users'))
+
+        data = {
+            'event': 'delete_user',
+            'user_id': str(user_id),
+            'admin_id': str(current_user.id)
+        }
         
-        # Delete user's posts
-        Post.query.filter_by(user_id=user_id).delete()
+        # Enviar requisição para o webhook
+        response = requests.post(webhook_url, json=data, timeout=10)
+        response.raise_for_status()
         
-        # Delete the user
-        db.session.delete(user)
-        db.session.commit()
-        flash('User deleted successfully!', 'success')
+        if response.json().get('status') == 'success':
+            flash('Usuário excluído com sucesso!', 'success')
+        else:
+            flash('Erro ao excluir usuário. Por favor, tente novamente.', 'danger')
+            
+    except requests.RequestException as e:
+        logger.error(f"Erro ao excluir usuário: {str(e)}")
+        flash('Erro ao excluir usuário. Por favor, tente novamente.', 'danger')
     except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting user: {str(e)}', 'danger')
+        logger.error(f"Erro inesperado ao excluir usuário: {str(e)}")
+        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
     
     return redirect(url_for('admin.manage_users'))
 

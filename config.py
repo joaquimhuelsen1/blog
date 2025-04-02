@@ -12,7 +12,7 @@ SUPABASE_DIRECT_URL = None
 
 class Config:
     # Configurações base compartilhadas
-    SECRET_KEY = os.environ.get('SECRET_KEY') or '7d9f83b5a12c4e67d8f92a31c5b7e9a2f4d6c8e0b3a5d7f9'
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
     
     # OpenAI
@@ -101,4 +101,20 @@ class Config:
     
     # Configurações de Debug
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    TESTING = False 
+    TESTING = False
+    
+    # Configuração da sessão
+    SESSION_TYPE = 'filesystem'
+    SESSION_PERMANENT = True
+
+    # Configuração básica
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI
+    
+    # Configuração básica
+    INSTANCE_PATH = INSTANCE_PATH
+    
+    # Configuração básica
+    DATABASE_URL = DATABASE_URL
+    
+    # Configuração básica
+    SUPABASE_DIRECT_URL = SUPABASE_DIRECT_URL 

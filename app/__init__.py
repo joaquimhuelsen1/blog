@@ -6,6 +6,7 @@ import importlib.util
 # from flask_session import Session
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from config import Config
+from dotenv import load_dotenv
 # Definir a variável SUPABASE_DIRECT_URL como global no módulo
 SUPABASE_DIRECT_URL = None
 from datetime import datetime, timedelta
@@ -15,6 +16,9 @@ import logging
 from sqlalchemy import text
 import re
 import socket
+from flask_migrate import Migrate
+from flask_mail import Mail
+from flask_session import Session
 
 # Configurar logging
 logging.basicConfig(
@@ -33,7 +37,6 @@ from app.extensions import db, login_manager
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
 if flask_migrate_available:
-    from flask_migrate import Migrate
     migrate = Migrate()
     logger.info("Flask-Migrate disponível e inicializado")
 else:
@@ -43,7 +46,6 @@ else:
 # Verificar se Flask-Session está disponível
 flask_session_available = importlib.util.find_spec('flask_session') is not None
 if flask_session_available:
-    from flask_session import Session
     sess = Session()
     logger.info("Flask-Session disponível e inicializado")
 else:
@@ -53,6 +55,9 @@ else:
 login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
+
+# Carregar variáveis de ambiente do .env
+load_dotenv()
 
 def diagnose_connection(host, port=5432):
     """Função para diagnosticar problemas de conectividade com banco de dados"""

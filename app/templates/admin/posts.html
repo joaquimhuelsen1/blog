@@ -12,7 +12,7 @@
                     <th>Title</th>
                     <th>Author</th>
                     <th>Created</th>
-                    <th>Premium</th>
+                    <th>Type</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -21,13 +21,11 @@
                 <tr>
                     <td>{{ post.title }}</td>
                     <td>{{ post.author.username }}</td>
-                    <td>{{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ post.created_at }}</td>
                     <td>
-                        {% if post.premium_only %}
-                        <span class="badge bg-warning">Premium</span>
-                        {% else %}
-                        <span class="badge bg-secondary">Free</span>
-                        {% endif %}
+                        <span class="badge {% if post.premium_only %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                            {{ "Premium" if post.premium_only else "Free" }}
+                        </span>
                     </td>
                     <td>
                         <div class="btn-group">
