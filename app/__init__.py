@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger('blog_app_init')
 
 # Importar extensões
-from app.extensions import db, login_manager
+from app.extensions import db, login_manager, mail
 
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
@@ -269,7 +269,28 @@ def create_app():
     
     # Inicializar extensões
     db.init_app(app)
-    logger.info("SQLAlchemy inicializado")
+    login_manager.init_app(app)
+    mail.init_app(app) # Inicializar Mail
+    
+    # Inicializar Flask-Session se disponível
+    if sess:
+        sess.init_app(app)
+        logger.info("Flask-Session inicializado com o app")
+        
+        # Se o tipo de sessão for sqlalchemy, criar a tabela
+        if app.config.get('SESSION_TYPE') == 'sqlalchemy':
+            try:
+                with app.app_context():
+                    # Garante que a tabela de sessão exista
+                    sess.app.session_interface.sql_session_model.metadata.create_all(bind=db.engine)
+                    logger.info(f"Tabela de sessão '{app.config.get('SESSION_SQLALCHEMY_TABLE', 'sessions')}' verificada/criada.")
+            except Exception as table_error:
+                logger.error(f"Erro ao verificar/criar tabela de sessão: {table_error}")
+                
+    # Inicializar Flask-Migrate se disponível
+    if migrate:
+        migrate.init_app(app, db)
+        logger.info("Flask-Migrate inicializado com o app e db")
     
     # Configurar listeners dentro do contexto da aplicação
     with app.app_context():

@@ -1,218 +1,1001 @@
 {% extends "base.html" %}
 
-{% block title %}Torne-se Premium - Blog Reconquista{% endblock %}
+{% block title %}Premium Access - Reconquest Blog{% endblock %}
 
 {% block extra_css %}
 <style>
-    .premium-header {
-        background: linear-gradient(135deg, #ffd700, #ff9900);
-        padding: 4rem 0;
-        margin-bottom: 3rem;
-        color: #333;
+    /* Estilo para a nova barra de header */
+    .premium-header-bar {
+        background: linear-gradient(45deg, #ffc107, #ff9800);
+        color: #fff;
         text-align: center;
+        padding: 10px 0;
+        font-weight: bold;
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        width: 100vw; /* Usa a largura total da viewport */
+        margin-top: 0; /* Remove margem superior */
+        margin-left: calc(50% - 50vw); /* Centraliza compensando o offset */
+        margin-right: calc(50% - 50vw); /* Centraliza compensando o offset */
+        box-sizing: border-box;
+    }
+    
+    /* Estilos gerais e efeitos */
+    .premium-page {
+        background-color: #fcfcfc;
+    }
+    
+    /* Hero section styles */
+    .hero-section {
+        position: relative;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 20px;
+        padding: 3.5rem 2rem;
+        margin-bottom: 4rem;
+        overflow: hidden;
+        box-shadow: 0 15px 50px rgba(0,0,0,0.05);
+    }
+    
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 8px;
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+        border-radius: 20px 20px 0 0;
+    }
+    
+    .hero-section::after {
+        content: '';
+        position: absolute;
+        bottom: -50px;
+        right: -50px;
+        width: 200px;
+        height: 200px;
+        /* background: radial-gradient(circle, rgba(255,193,7,0.2) 0%, rgba(255,193,7,0) 70%); */ /* Comentado */
+        display: none; /* Oculta o elemento */
+        z-index: 0;
+        border-radius: 50%;
+    }
+    
+    .broken-heart {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+        display: inline-block;
+        color: #e91e63;
+        text-shadow: 0 2px 10px rgba(233, 30, 99, 0.2);
+        position: relative;
+        z-index: 1;
+    }
+    
+    .hero-title {
+        position: relative;
+        margin-bottom: 2rem;
+        display: inline-block;
+        font-size: 2.2rem;
+        font-weight: 800;
+        line-height: 1.3;
+        z-index: 1;
+    }
+    
+    .hero-title-highlight {
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        position: relative;
+        font-style: italic;
+    }
+    
+    .hero-title-highlight::after {
+        content: '';
+        position: absolute;
+        bottom: -5px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+        border-radius: 10px;
+    }
+    
+    .hero-description {
+        font-size: 1.15rem;
+        line-height: 1.7;
+        color: #555;
+        margin-bottom: 2rem;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .hero-call-to-action {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        color: #333;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .hero-call-to-action .pointer {
+        display: inline-block;
+        color: #ffc107;
+        text-shadow: 0 2px 5px rgba(255, 193, 7, 0.4);
+        animation: point-right 1.5s ease-in-out infinite;
+        position: relative;
+        top: 3px;
+    }
+    
+    @keyframes point-right {
+        0% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+        100% { transform: translateX(0); }
+    }
+    
+    .btn-wrapper {
+        display: inline-block;
+        position: relative;
+        z-index: 1;
+        width: auto;
+        max-width: 100%;
+    }
+    
+    .premium-btn {
+        display: inline-block;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        position: relative;
+        overflow: hidden;
+        z-index: 1;
+        box-shadow: 0 8px 25px rgba(255, 193, 7, 0.4);
+        border: none;
+        font-size: 1.1rem;
+        padding: 15px 40px;
+        border-radius: 50px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        background: linear-gradient(45deg, #ffc107, #ff9800);
+        color: #fff;
+        white-space: nowrap;
+        text-align: center;
+        width: auto;
+        margin: 0 auto;
+    }
+    
+    .premium-btn:hover {
+        box-shadow: 0 12px 30px rgba(255, 193, 7, 0.6);
+        transform: translateY(-5px) scale(1.02);
+        background: linear-gradient(45deg, #ffca28, #ffa000);
+        color: #fff;
+        text-decoration: none;
+    }
+    
+    .premium-btn:active {
+        transform: translateY(0) scale(0.98);
+        box-shadow: 0 5px 15px rgba(255, 193, 7, 0.4);
+    }
+    
+    .premium-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+        transform: skewX(-25deg);
+        transition: all 0.75s ease;
+    }
+    
+    .premium-btn:hover::before {
+        left: 100%;
+    }
+    
+    .premium-btn.pulse-anim {
+        animation: none;
+    }
+    
+    .page-header {
+        position: relative;
+        padding-bottom: 2rem;
+    }
+    
+    .page-header::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 150px;
+        height: 4px;
+        background: linear-gradient(90deg, #ffc107, #ff9800);
+        border-radius: 4px;
+    }
+    
+    /* Novo estilo para a seção "What You'll Get" */
+    .weekly-content-section {
+        padding: 1rem 0 3rem;
+    }
+    
+    .weekly-title-wrapper {
+        text-align: center;
+        margin-bottom: 2.5rem;
+    }
+    
+    .weekly-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #212529;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    
+    .weekly-title .calendar-icon {
+        font-size: 1.5rem;
+        margin-right: 0.6rem;
+        position: relative;
+        top: -2px;
+    }
+    
+    .weekly-subtitle {
+        font-size: 1.05rem;
+        color: #6c757d;
+        max-width: 600px;
+        margin: 0 auto;
+        line-height: 1.6;
+    }
+    
+    .weekly-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 80px;
+        height: 3px;
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+        border-radius: 3px;
+    }
+    
+    .weekly-day-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.03);
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .weekly-day-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+    }
+    
+    .weekly-day-card.monday {
+        border-left-color: #ff9a9e;
+    }
+    
+    .weekly-day-card.wednesday {
+        border-left-color: #e91e63;
+    }
+    
+    .weekly-day-card.friday {
+        border-left-color: #a7a7a7;
+    }
+    
+    .weekly-day-card.weekend {
+        border-left-color: #2196f3;
+    }
+    
+    .day-title {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.7rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .day-icon {
+        margin-right: 0.6rem;
+        font-size: 1.4rem;
+    }
+    
+    .day-icon.brain {
+        color: #ff9a9e;
+    }
+    
+    .day-icon.heart {
+        color: #e91e63;
+    }
+    
+    .day-icon.bandage {
+        color: #a7a7a7;
+    }
+    
+    .day-icon.book {
+        color: #2196f3;
+    }
+    
+    .day-description {
+        color: #666;
+        font-size: 1rem;
+        font-style: italic;
+        margin-left: 2.1rem;
+    }
+    
+    /* Fim dos novos estilos */
+    
+    .premium-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: none;
+    }
+    
+    .premium-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Estilos aprimorados para os benefícios premium */
+    .perks-container {
+        background: linear-gradient(145deg, #f8f9fa, #ffffff);
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .perks-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 6px;
+        height: 100%;
+        background: linear-gradient(to bottom, #ffc107, #ff9800);
+        border-radius: 3px 0 0 3px;
+    }
+    
+    .perks-title {
+        font-weight: 700;
+        position: relative;
+        display: inline-block;
+        margin-bottom: 25px;
+    }
+    
+    .perks-title .diamond-icon {
+        font-size: 1.3rem;
+        color: #00BCD4;
+        margin-right: 10px;
+        filter: drop-shadow(0 2px 3px rgba(0,188,212,0.3));
+    }
+    
+    .perks-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .perk-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 12px 15px;
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        transition: all 0.3s ease;
+    }
+    
+    .perk-item:hover {
+        transform: translateX(8px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    }
+    
+    .perk-item:last-child {
+        margin-bottom: 0;
+    }
+    
+    .perk-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        border-radius: 50%;
+        margin-right: 15px;
+        flex-shrink: 0;
+        color: white;
+        font-size: 1rem;
+        box-shadow: 0 4px 10px rgba(37, 117, 252, 0.2);
+    }
+    
+    .perk-icon.education {
+        background: linear-gradient(135deg, #2575fc 0%, #6a11cb 100%);
+    }
+    
+    .perk-icon.support {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    
+    .perk-icon.bonus {
+        background: linear-gradient(135deg, #ff9800 0%, #f44336 100%);
+    }
+    
+    .perk-text {
+        font-weight: 500;
+        font-size: 1.05rem;
+        color: #444;
+    }
+    
+    /* Estilos aprimorados para "Who is this for" */
+    .for-who-container {
+        margin-top: 30px;
+    }
+    
+    .for-who-title {
+        margin-bottom: 35px;
+    }
+    
+    .criteria-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .criteria-item {
+        position: relative;
+        padding: 18px 20px;
+        margin-bottom: 15px;
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.03);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        border-left: 4px solid transparent;
+    }
+    
+    .criteria-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    }
+    
+    .criteria-item.heart-icon {
+        border-left-color: #e91e63;
+    }
+    
+    .criteria-item.question-icon {
+        border-left-color: #2196f3;
+    }
+    
+    .criteria-item.retry-icon {
+        border-left-color: #4caf50;
+    }
+    
+    .criteria-item.user-icon {
+        border-left-color: #673ab7;
+    }
+    
+    .criteria-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        margin-right: 15px;
+        flex-shrink: 0;
+        color: white;
+        font-size: 1.1rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .criteria-icon.heart-bg {
+        background: linear-gradient(135deg, #ff5e62 0%, #ff9966 100%);
+    }
+    
+    .criteria-icon.question-bg {
+        background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+    }
+    
+    .criteria-icon.retry-bg {
+        background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+    }
+    
+    .criteria-icon.user-bg {
+        background: linear-gradient(135deg, #603cba 0%, #b39ddb 100%);
+    }
+    
+    .criteria-text {
+        font-weight: 500;
+        font-size: 1.05rem;
+        color: #444;
+    }
+    
+    .criteria-text em {
+        color: #673ab7;
+        font-weight: 600;
+        font-style: normal;
+    }
+    
+    /* Estilos aprimorados para depoimentos */
+    .testimonials-container {
+        position: relative;
+    }
+    
+    .testimonial-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        border: none;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .testimonial-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+    }
+    
+    .testimonial-content {
+        position: relative;
+        padding-left: 30px;
+        border-left: 4px solid #ffc107;
+        margin-bottom: 20px;
+    }
+    
+    .testimonial-content:before {
+        content: '\201C';
+        font-family: Georgia, serif;
+        position: absolute;
+        top: -20px;
+        left: -15px;
+        font-size: 60px;
+        color: rgba(255, 193, 7, 0.2);
+        line-height: 1;
+    }
+    
+    .testimonial-content:after {
+        content: '\201D';
+        font-family: Georgia, serif;
+        position: absolute;
+        bottom: -50px;
+        right: 0;
+        font-size: 60px;
+        color: rgba(255, 193, 7, 0.2);
+        line-height: 1;
+    }
+    
+    .testimonial-text {
+        font-style: italic;
+        font-size: 1.1rem;
+        color: #555;
+        line-height: 1.6;
+        margin-bottom: 15px;
+    }
+    
+    .testimonial-author {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-top: 10px;
+        border-top: 1px solid #f0f0f0;
+    }
+    
+    .testimonial-name {
+        font-weight: 600;
+        color: #333;
+        font-size: 1rem;
+    }
+    
+    .testimonial-info {
+        color: #888;
+        font-size: 0.9rem;
+    }
+    
+    .highlight-text {
+        background: linear-gradient(90deg, #ff9800, #ff5722);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: bold;
     }
     
     .premium-badge {
         display: inline-block;
-        background-color: #ffc107;
+        background: linear-gradient(90deg, #ffc107, #ff9800);
         color: #000;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-    
-    .price-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        transition: transform 0.3s, box-shadow 0.3s;
-        margin-bottom: 2rem;
-    }
-    
-    .price-card:hover {
-        transform: translateY(-10px);
-        box-shadow: 0 15px 30px rgba(0,0,0,0.15);
-    }
-    
-    .price-card .card-header {
-        font-size: 1.5rem;
-        font-weight: 700;
-        text-align: center;
-        padding: 1.5rem;
-        border-bottom: none;
-    }
-    
-    .price-card .price {
-        font-size: 3rem;
-        font-weight: 700;
-        text-align: center;
-        padding: 1rem 0;
-        color: #333;
-    }
-    
-    .price-card .price small {
-        font-size: 1rem;
-        color: #777;
-    }
-    
-    .price-card .card-body {
-        padding: 2rem;
-    }
-    
-    .price-card .feature-list {
-        margin-bottom: 2rem;
-    }
-    
-    .price-card .feature-list li {
-        margin-bottom: 0.8rem;
-        position: relative;
-        padding-left: 1.5rem;
-    }
-    
-    .price-card .feature-list li:before {
-        content: "✓";
-        color: #28a745;
+        padding: 8px 20px;
+        border-radius: 30px;
         font-weight: bold;
-        position: absolute;
-        left: 0;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 10px rgba(255, 193, 7, 0.3);
     }
     
-    .premium-features {
-        margin-top: 4rem;
-        margin-bottom: 4rem;
-    }
-    
-    .feature-icon {
-        font-size: 2.5rem;
-        color: #ffc107;
-        margin-bottom: 1rem;
-    }
-    
-    .testimonial {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 2rem;
+    .section-title {
+        position: relative;
         margin-bottom: 2rem;
     }
     
-    .testimonial-avatar {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-bottom: 1rem;
+    .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(90deg, #ffc107, #ff9800);
+        border-radius: 3px;
     }
     
-    .ai-exclusive-alert {
-        background-color: #e7f5ff;
-        border-left: 5px solid #74c0fc;
-        padding: 15px 20px;
-        margin-bottom: 30px;
-        border-radius: 5px;
+    .feature-card {
+        border-radius: 10px;
+        overflow: hidden;
+        border: none;
+    }
+    
+    .risk-free {
+        background-image: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-left: 5px solid #28a745;
+    }
+    
+    /* Animações */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .pulse-anim {
+        animation: pulse 2s infinite;
+    }
+    
+    /* Responsivo */
+    @media (max-width: 768px) {
+        .premium-badge {
+            padding: 6px 15px;
+            font-size: 0.9rem;
+        }
+        
+        .testimonial-card {
+            padding: 20px;
+        }
+        
+        .testimonial-content {
+            padding-left: 15px;
+        }
+        
+        .perk-item {
+            padding: 10px;
+        }
+        
+        .perk-icon {
+            width: 35px;
+            height: 35px;
+            margin-right: 10px;
+        }
+        
+        .criteria-item {
+            padding: 15px;
+        }
+        
+        .criteria-icon {
+            width: 40px;
+            height: 40px;
+        }
+        
+        .hero-section {
+            padding: 2rem 1rem;
+        }
+        
+        .hero-title {
+            font-size: 1.8rem;
+        }
+        
+        .broken-heart {
+            font-size: 2rem;
+        }
+        
+        .hero-description {
+            font-size: 1rem;
+        }
+        
+        .premium-btn {
+            padding: 12px 25px;
+            font-size: 1rem;
+            white-space: normal;
+            width: 100%;
+            max-width: 280px;
+        }
+        
+        .btn-wrapper {
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .weekly-title {
+            font-size: 1.5rem;
+        }
+        
+        .weekly-subtitle {
+            font-size: 0.95rem;
+        }
+        
+        .weekly-day-card {
+            padding: 1.2rem;
+        }
+        
+        .day-title {
+            font-size: 1.1rem;
+        }
+        
+        .day-description {
+            font-size: 0.95rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="premium-header">
-    <div class="container">
-        <h1 class="display-4">Conteúdo Premium Bloqueado</h1>
-        <p class="lead">Torne-se um membro premium para acessar este e outros conteúdos exclusivos.</p>
-    </div>
+<div class="premium-header-bar">
+    UNLOCK PREMIUM ACCESS
 </div>
 
-<div class="container">
-    <!-- Mensagem para usuários autenticados -->
-    {% if current_user.is_authenticated and not current_user.is_premium %}
-    <div class="alert alert-info mb-5">
-        <h4 class="alert-heading">Olá, {{ current_user.username }}!</h4>
-        <p>Você já possui uma conta, mas precisa atualizar para o plano premium para ter acesso a este conteúdo.</p>
-    </div>
-    {% endif %}
+<div class="container mt-5 mb-3 premium-page">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-8">
 
-    <div class="row">
-        <div class="col-md-6 offset-md-3">
-            <div class="card price-card">
-                <div class="card-header bg-warning">Assinatura Premium</div>
-                <div class="price">$20.00 <small>/mês</small></div>
-                <div class="card-body">
-                    <ul class="feature-list">
-                        <li>Acesso a todos os artigos premium</li>
-                        <li>Estratégias avançadas de reconquista</li>
-                        <li>Psicologia feminina aprofundada</li>
-                        <li>Dicas exclusivas de relacionamento</li>
-                        <li>Novos conteúdos premium toda semana</li>
-                        <li>Suporte personalizado</li>
-                        <li>Grupo VIP no Telegram</li>
-                        <li>Acesso à IA de relacionamentos</li>
-                    </ul>
-                    <div class="text-center mt-4">
-                        <a href="https://buy.stripe.com/test_3cs5nMep6eAi1448wx" class="btn btn-warning btn-lg w-100" target="_blank">
-                            ASSINAR AGORA
-                        </a>
+            <section class="hero-section text-center">
+                <span class="broken-heart">💔</span>
+                <h1 class="hero-title mb-4">Still believe she was <span class="hero-title-highlight">"the one"</span>?</h1>
+                
+                <p class="hero-description">
+                    Unlock a private space where real men rebuild real love.
+                    <br>
+                    Get access to proven strategies that help you win her back – and never lose her again.
+                </p>
+                
+                <p class="hero-call-to-action">
+                    <span class="pointer">👉</span> Start rebuilding today.
+                </p>
+                
+                <div class="btn-wrapper">
+                    <a href="https://buy.stripe.com/4gw8zQe7Lg1Qac000n" class="premium-btn">
+                        Unlock Premium Access
+                    </a>
+                </div>
+            </section>
+
+            <hr class="mb-3">
+
+            <section class="weekly-content-section">
+                <div class="weekly-title-wrapper">
+                    <h2 class="weekly-title">
+                        <span class="calendar-icon"></span> What You'll Get (Weekly Premium Content)
+                    </h2>
+                    <p class="weekly-subtitle">Every week, a clear path forward – no games, no fluff, just results.</p>
+                </div>
+                
+                <div class="weekly-content">
+                    <div class="weekly-day-card monday">
+                        <h3 class="day-title">
+                            <span class="day-icon brain">🧠</span> Monday
+                        </h3>
+                        <p class="day-description">Reconquest strategies that really work</p>
+                    </div>
+                    
+                    <div class="weekly-day-card wednesday">
+                        <h3 class="day-title">
+                            <span class="day-icon heart">❤️</span> Wednesday
+                        </h3>
+                        <p class="day-description">How to make her stay this time</p>
+                    </div>
+                    
+                    <div class="weekly-day-card friday">
+                        <h3 class="day-title">
+                            <span class="day-icon bandage">🩹</span> Friday
+                        </h3>
+                        <p class="day-description">Healing tools to move past heartbreak</p>
+                    </div>
+                    
+                    <div class="weekly-day-card weekend">
+                        <h3 class="day-title">
+                            <span class="day-icon book">📖</span> Weekend
+                        </h3>
+                        <p class="day-description">Case studies from men who got her back</p>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+                
+                <div class="mt-4 perks-container">
+                    <h3 class="h5 fw-bold text-center perks-title">
+                        <span class="diamond-icon"></span> Plus, exclusive premium perks:
+                    </h3>
+                    <ul class="perks-list">
+                        <li class="perk-item">
+                            <div class="perk-icon education">
+                                <i class="fas fa-graduation-cap"></i>
+                            </div>
+                            <span class="perk-text">Advanced Female Psychology</span>
+                        </li>
+                        <li class="perk-item">
+                            <div class="perk-icon support">
+                                <i class="fas fa-hands-helping"></i>
+                            </div>
+                            <span class="perk-text">1-on-1 Personalized Support with Ethan</span>
+                        </li>
+                        <li class="perk-item">
+                            <div class="perk-icon bonus">
+                                <i class="fas fa-gift"></i>
+                            </div>
+                            <span class="perk-text">Surprise Bonus Content (randomly released)</span>
+                        </li>
+                    </ul>
+                </div>
 
-    <div class="premium-features">
-        <h2 class="text-center mb-5">Por que se tornar Premium?</h2>
-        <div class="row text-center">
-            <div class="col-md-4">
-                <div class="feature-icon">
-                    <i class="fas fa-lock-open"></i>
-                </div>
-                <h3>Conteúdo Exclusivo</h3>
-                <p>Acesse artigos detalhados e técnicas que não compartilhamos publicamente.</p>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-icon">
-                    <i class="fas fa-star"></i>
-                </div>
-                <h3>Prioridade Total</h3>
-                <p>Receba novos conteúdos antes de todos e tenha suporte prioritário.</p>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <h3>Comunidade VIP</h3>
-                <p>Participe do nosso grupo exclusivo e conecte-se com outros membros.</p>
-            </div>
-        </div>
-    </div>
+                <blockquote class="blockquote text-center fst-italic my-4">
+                    <p class="mb-0">You don't need more theory. You need a system that works.</p>
+                    <p>Let's make her say: "You've changed... for real."</p>
+                </blockquote>
+            </section>
 
-    <div class="row mb-5">
-        <div class="col-md-8 offset-md-2">
-            <h2 class="text-center mb-4">O que nossos assinantes dizem</h2>
-            <div class="testimonial">
-                <div class="text-center">
-                    <img src="https://via.placeholder.com/150" class="testimonial-avatar" alt="Avatar">
-                    <h5>Carlos Silva</h5>
-                    <p class="text-muted mb-3">Assinante há 6 meses</p>
-                </div>
-                <p>"O conteúdo premium do Blog Reconquista mudou completamente minha forma de me relacionar. Consegui reconquistar minha ex-namorada usando as técnicas exclusivas que aprendi aqui."</p>
-            </div>
-            <div class="testimonial">
-                <div class="text-center">
-                    <img src="https://via.placeholder.com/150" class="testimonial-avatar" alt="Avatar">
-                    <h5>Rafael Mendes</h5>
-                    <p class="text-muted mb-3">Assinante há 1 ano</p>
-                </div>
-                <p>"Vale cada centavo! O conhecimento que adquiri me fez entender profundamente a psicologia feminina. Não tenho mais problemas para manter relacionamentos saudáveis e duradouros."</p>
-            </div>
-        </div>
-    </div>
+            <hr class="mb-5">
 
-    <div class="text-center mb-5">
-        <h3>Ainda tem dúvidas?</h3>
-        <p>Entre em contato conosco pelo e-mail <strong>premium@blogreconquista.com.br</strong> para mais informações.</p>
-        <div class="text-center mt-4">
-            <a href="https://buy.stripe.com/test_3cs5nMep6eAi1448wx" class="btn btn-warning btn-lg" target="_blank">
-                ASSINAR AGORA
-            </a>
+            <section class="mb-5 for-who-container">
+                <h2 class="text-center h3 fw-bold mb-4 section-title for-who-title">Who Is This For?</h2>
+                <p class="text-center fs-5 mb-4">This is for men who:</p>
+                <ul class="criteria-list">
+                    <li class="criteria-item heart-icon">
+                        <div class="criteria-icon heart-bg">
+                            <i class="fas fa-heartbeat"></i>
+                        </div>
+                        <span class="criteria-text">Were in long-term relationships or marriages</span>
+                    </li>
+                    <li class="criteria-item question-icon">
+                        <div class="criteria-icon question-bg">
+                            <i class="fas fa-question-circle"></i>
+                        </div>
+                        <span class="criteria-text">Still believe it's not over yet</span>
+                    </li>
+                    <li class="criteria-item retry-icon">
+                        <div class="criteria-icon retry-bg">
+                            <i class="fas fa-redo"></i>
+                        </div>
+                        <span class="criteria-text">Want to try one more time – but the right way</span>
+                    </li>
+                    <li class="criteria-item user-icon">
+                        <div class="criteria-icon user-bg">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <span class="criteria-text">Are ready to become the man she <em>wants</em> to return to</span>
+                    </li>
+                </ul>
+                <blockquote class="blockquote text-center fst-italic my-4">
+                    <p>If you're done guessing, chasing, and overthinking...</p>
+                    <p class="fw-bold">This space is your next smart move.</p>
+                </blockquote>
+            </section>
+
+            <hr class="mb-5">
+
+            <section class="mb-5 testimonials-container">
+                <h2 class="text-center h3 fw-bold mb-4 section-title">Real Stories. Real Results.</h2>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <p class="testimonial-text">"My divorce hit me like a truck. I didn't know where to start until I found Ethan. His strategies aren't about tricks — they're about transformation. We're back together now, stronger than ever."</p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="text-end">
+                                    <div class="testimonial-name">James L.</div>
+                                    <div class="testimonial-info">42, Texas</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <p class="testimonial-text">"I had zero hope. We were done. But this content gave me structure, confidence and clarity. She messaged me first two weeks later. We're planning a trip next month."</p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="text-end">
+                                    <div class="testimonial-name">Derrick P.</div>
+                                    <div class="testimonial-info">37, Florida</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <p class="testimonial-text">"Ethan's personal feedback made all the difference. It's rare to feel seen and guided like this. For the first time, I knew exactly what to say — and what not to."</p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="text-end">
+                                    <div class="testimonial-name">Michael R.</div>
+                                    <div class="testimonial-info">55, California</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4">
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <p class="testimonial-text">"This membership isn't just about getting her back. It's about getting your self-respect back. The woman I thought I lost forever now texts me *every night*."</p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="text-end">
+                                    <div class="testimonial-name">Daniel K.</div>
+                                    <div class="testimonial-info">44, New York</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-4 mx-auto">
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <p class="testimonial-text">"At first, I thought it was just another coaching thing. But the results speak for themselves. Two months in, my ex told me, 'You're not the same guy I left... and I like it.'"</p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="text-end">
+                                    <div class="testimonial-name">Brandon W.</div>
+                                    <div class="testimonial-info">49, Illinois</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <hr class="mb-5">
+
+            <section class="text-center mb-5 p-4 rounded shadow-sm risk-free">
+                <h2 class="h3 fw-bold mb-3"><i class="fas fa-shield-alt text-success me-2"></i> No Risk, All Respect</h2>
+                <p class="fs-5 mb-3">Try it 100% risk-free. Cancel anytime.<br>No small print. No shady stuff.</p>
+                <p class="fw-bold fs-5">
+                    Bonus: If you don't feel more emotionally in control and more prepared to reconnect in 30 days, just ask – you'll get your money back. No questions asked.
+                </p>
+            </section>
+
+            <hr class="mb-5">
+
+            <section class="text-center">
+                <h2 class="h3 fw-bold mb-3 section-title">Ready to Start Your Comeback?</h2>
+                <p class="fs-5 mb-4">
+                    You've tried doing this alone.<br>
+                    Now it's time to follow a system that actually works.
+                </p>
+                <p class="fs-5 mb-4 fw-bold">👇 Tap the button below to get instant access.</p>
+                <div class="btn-wrapper">
+                    <a href="https://buy.stripe.com/4gw8zQe7Lg1Qac000n" class="premium-btn">
+                        Join Premium Now
+                    </a>
+                </div>
+            </section>
+
         </div>
     </div>
 </div>
