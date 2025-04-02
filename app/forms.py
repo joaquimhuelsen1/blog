@@ -98,7 +98,9 @@ class UserUpdateForm(FlaskForm):
 class ProfileUpdateForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
     email = StringField('Email', validators=[DataRequired(), Email()])
-    age = IntegerField('Age', validators=[Optional(), NumberRange(min=18, max=120)], description="Optional. You can leave this field blank.")
+    age = IntegerField('Age', validators=[Optional()])
+    password = PasswordField('New password', validators=[Optional(), Length(min=6)])
+    confirm_password = PasswordField('Confirm new password', validators=[Optional(), EqualTo('password', message='Passwords must match')])
     submit = SubmitField('Update Profile')
     
     def __init__(self, original_username=None, original_email=None, *args, **kwargs):

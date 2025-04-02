@@ -543,8 +543,22 @@ def forgot_password():
             logger.info(f"Resposta: {response.text}")
 
             if response.status_code == 200:
-                flash('If the email is registered, you will receive instructions to reset your password.', 'success')
-                return redirect(url_for('auth.login'))
+                response_data = response.json()
+                
+                # Verificar o status retornado pelo webhook
+                if response_data.get('status') == 'success':
+                    logger.info(f"Status success recebido do webhook, email: {email}")
+                    flash('If the email is registered, you will receive instructions to reset your password.', 'success')
+                    return render_template('auth/forgot_password.html', email_sent=True, email=email)
+                elif response_data.get('status') == 'false':
+                    logger.warning(f"Status false recebido do webhook, email não registrado: {email}")
+                    flash('This email is not registered in our system. Please check your email or register a new account.', 'danger')
+                    return render_template('auth/forgot_password.html')
+                else:
+                    # Caso o status não seja reconhecido
+                    logger.warning(f"Status desconhecido recebido do webhook: {response_data}")
+                    flash('If the email is registered, you will receive instructions to reset your password.', 'success')
+                    return render_template('auth/forgot_password.html', email_sent=True, email=email)
             else:
                 logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
                 flash('Error processing your request. Please try again.', 'danger')
