@@ -20,7 +20,7 @@ def profile():
             # Verificar se o email já existe
             existing_user = User.query.filter_by(email=form.email.data).first()
             if existing_user and existing_user.id != current_user.id:
-                flash('Este email já está em uso por outro usuário.', 'danger')
+                flash('This email is already in use by another user.', 'danger')
                 return render_template('user/profile.html', form=form)
             
             current_user.email = form.email.data
@@ -28,14 +28,14 @@ def profile():
         # Atualizar a senha se fornecida
         if form.password.data:
             current_user.set_password(form.password.data)
-            flash('Sua senha foi atualizada com sucesso.', 'success')
+            flash('Your password has been updated successfully.', 'success')
             
         # Atualizar idade se fornecida
         if form.age.data:
             current_user.age = form.age.data
             
         db.session.commit()
-        flash('Seu perfil foi atualizado com sucesso.', 'success')
+        flash('Your profile has been updated successfully.', 'success')
         return redirect(url_for('user.profile'))
         
     elif request.method == 'GET':

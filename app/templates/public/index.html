@@ -5,9 +5,9 @@
 {% block content %}
 <div class="jumbotron bg-light p-5 rounded mb-4">
     <h1 class="welcome-title">Welcome to Relationship Blog</h1>
-    <p class="lead">Specialized content on male relationships.</p>
+    <p class="lead">An exclusive space for men who want to win back love, maintain a healthy and active relationship, and overcome a breakup. Here you will find real strategies to rebuild relationships and become the man she will never want to lose again.</p>
     <hr class="my-4">
-    <p>Learn the best strategies to improve your relationships and win the woman of your dreams.</p>
+    <p>Learn what really works to bring your ex back with dignity and emotional intelligence.</p>
     {% if not current_user.is_authenticated %}
     <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}" role="button">Register</a>
     {% elif not current_user.is_premium %}
@@ -54,19 +54,7 @@
 </style>
 
 <!-- Personalized Coaching Banner -->
-<div class="card mb-4 coaching-banner">
-    <div class="card-body p-4">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h3 class="mb-3">Let's Find Out What Kind Of Chance You Have With Your Ex</h3>
-                <p class="mb-md-0">My name is Ethan Heyes and I'm a specialist in helping couples reunite after breakups. Take my test to find out where you stand.</p>
-            </div>
-            <div class="col-md-4 text-center text-md-end">
-                <a href="{{ url_for('main.teste_de_reconquista') }}" class="btn btn-lg btn-primary px-4 py-2">Take the test</a>
-            </div>
-        </div>
-    </div>
-</div>
+{% include 'public/components/reconquest_test_banner.html' %}
 
 <div class="row">
     <div class="col-md-8">

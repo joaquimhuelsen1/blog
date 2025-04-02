@@ -88,22 +88,6 @@
                 <input type="email" class="form-control" id="email" name="email" required>
             </div>
             
-            <div class="mb-4">
-                <label class="form-label">Are you a Reconquest Map student?</label>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="isStudent" id="isStudentYes" value="Yes" required>
-                    <label class="form-check-label" for="isStudentYes">
-                        Yes
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="isStudent" id="isStudentNo" value="No">
-                    <label class="form-check-label" for="isStudentNo">
-                        No
-                    </label>
-                </div>
-            </div>
-            
             <div class="text-center mt-5">
                 <button type="submit" class="btn btn-lg btn-primary px-5">Submit Test</button>
             </div>
@@ -134,10 +118,9 @@
             const timeSinceBreakup = document.getElementById('timeSinceBreakup').value;
             const breakupReason = document.getElementById('breakupReason').value;
             const email = document.getElementById('email').value;
-            const isStudent = document.querySelector('input[name="isStudent"]:checked');
             
             if (!fullName || !age || !exName || !exAge || !relationshipLength || 
-                !timeSinceBreakup || !breakupReason || !email || !isStudent) {
+                !timeSinceBreakup || !breakupReason || !email) {
                 alert('Please fill in all fields of the form.');
                 return;
             }
@@ -151,8 +134,7 @@
                 relationshipLength, 
                 timeSinceBreakup, 
                 breakupReason, 
-                email, 
-                isStudent: isStudent.value
+                email
             };
             
             console.log("Sending data for analysis:", formData);

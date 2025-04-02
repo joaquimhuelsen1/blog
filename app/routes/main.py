@@ -419,7 +419,7 @@ def coaching():
     """Render the coaching page."""
     return render_template('public/coaching.html')
 
-@main_bp.route('/teste-de-reconquista')
+@main_bp.route('/reconquest-test')
 def teste_de_reconquista():
     """Render the reconquest test page."""
     return render_template('public/coaching.html')

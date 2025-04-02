@@ -15,6 +15,7 @@ import requests
 import os
 import secrets
 import uuid
+import hashlib
 
 # Configurar logging
 logging.basicConfig(
@@ -63,7 +64,7 @@ def login():
                 
                 if not webhook_url:
                     logger.error("WEBHOOK_LOGIN não configurado")
-                    flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+                    flash('Error in configuration. Please try again later.', 'danger')
                     return render_template('auth/login.html', form=form)
                 
                 # Preparar dados para o webhook
@@ -93,57 +94,123 @@ def login():
                 if response.status_code == 200:
                     response_data = response.json()
                     
-                    # Verificar se há erro na resposta
-                    if response_data.get('status') == 'error login does not exist':
+                    # Verificar status de erro
+                    if response_data.get('status') == 'false':
                         logger.warning(f"Login falhou para email: {form.email.data}")
-                        flash('Email ou senha inválidos.', 'danger')
+                        flash('Invalid email or password.', 'danger')
                         return render_template('auth/login.html', form=form)
                     
-                    # Se não houver erro, criar um objeto User temporário com os dados retornados
-                    user_data = response_data
-                    user = User(
-                        id=user_data.get('id'),
-                        username=user_data.get('username'),
-                        email=user_data.get('email', form.email.data),
-                        is_admin=user_data.get('is_admin', False),
-                        is_premium=user_data.get('is_premium', False),
-                        age=user_data.get('age'),
-                        ai_credits=user_data.get('ai_credits', 0)
-                    )
-                    
-                    # Fazer login do usuário
-                    login_user(user, remember=form.remember_me.data)
-                    logger.info(f"Login bem-sucedido para: {user.email} (ID: {user.id})")
-                    
-                    # Armazenar dados do usuário na sessão
-                    session['user_data'] = {
-                        'id': str(user.id),
-                        'username': user.username,
-                        'email': user.email,
-                        'is_admin': user.is_admin,
-                        'is_premium': user.is_premium,
-                        'age': user.age,
-                        'ai_credits': user.ai_credits
-                    }
-                    
-                    next_page = request.args.get('next')
-                    if not next_page or urlparse(next_page).netloc != '':
-                        next_page = url_for('main.index')
-                    return redirect(next_page)
+                    # Se o status for success, tentar obter dados do usuário
+                    elif response_data.get('status') == 'success':
+                        try:
+                            # Log de todos os headers para debug
+                            logger.info("Headers da resposta do webhook:")
+                            for header_name, header_value in response.headers.items():
+                                logger.info(f"  {header_name}: {header_value}")
+                            
+                            # Extrair dados do cabeçalho
+                            user_id = response.headers.get('X-User-Id')
+                            username = response.headers.get('X-User-Username')
+                            email = response.headers.get('X-User-Email', form.email.data)
+                            is_admin = response.headers.get('X-User-IsAdmin', 'false').lower() == 'true'
+                            is_premium = response.headers.get('X-User-IsPremium', 'false').lower() == 'true'
+                            age = response.headers.get('X-User-Age')
+                            ai_credits = int(response.headers.get('X-User-AiCredits', '0'))
+                            
+                            # Log do corpo da resposta
+                            logger.info(f"Corpo da resposta: {response_data}")
+                            
+                            # Se não encontrou dados essenciais nos headers, tenta do corpo
+                            if not user_id or not username:
+                                logger.warning("Dados não encontrados nos headers, tentando obter do corpo")
+                                
+                                # Verificar se há campo 'user' no corpo
+                                if isinstance(response_data, dict) and 'user' in response_data:
+                                    user_data = response_data['user']
+                                else:
+                                    user_data = response_data
+                                
+                                # Obter dados do corpo
+                                user_id = user_id or user_data.get('id')
+                                username = username or user_data.get('username')
+                                email = email or user_data.get('email', form.email.data)
+                                
+                                # Obter os demais dados do corpo
+                                if is_admin is None:
+                                    is_admin = user_data.get('is_admin', False)
+                                if is_premium is None:
+                                    is_premium = user_data.get('is_premium', False)
+                                if not age:
+                                    age = user_data.get('age')
+                                if ai_credits is None:
+                                    ai_credits = user_data.get('ai_credits', 0)
+                            
+                            # Verificação final: se ainda não temos ID, usar email como base
+                            if not user_id:
+                                logger.warning("ID não encontrado, usando hash do email")
+                                user_id = hashlib.md5(email.encode()).hexdigest()
+                            
+                            # Se ainda não temos username, usar parte do email
+                            if not username:
+                                logger.warning("Username não encontrado, usando parte do email")
+                                username = email.split('@')[0]
+                            
+                            logger.info(f"Dados finais: ID={user_id}, Username={username}, Email={email}")
+                            
+                            # Criar objeto User com os dados recebidos
+                            user = User(
+                                id=user_id,
+                                username=username,
+                                email=email,
+                                is_admin=is_admin,
+                                is_premium=is_premium,
+                                age=age,
+                                ai_credits=ai_credits
+                            )
+                            
+                            # Fazer login do usuário
+                            login_user(user, remember=form.remember_me.data)
+                            logger.info(f"Login bem-sucedido para: {user.email} (ID: {user.id})")
+                            
+                            # Armazenar dados do usuário na sessão
+                            session['user_data'] = {
+                                'id': str(user.id),
+                                'username': user.username,
+                                'email': user.email,
+                                'is_admin': user.is_admin,
+                                'is_premium': user.is_premium,
+                                'age': user.age,
+                                'ai_credits': user.ai_credits
+                            }
+                            
+                            next_page = request.args.get('next')
+                            if not next_page or urlparse(next_page).netloc != '':
+                                next_page = url_for('main.index')
+                            return redirect(next_page)
+                        except Exception as header_error:
+                            logger.error(f"Erro ao processar dados do usuário: {str(header_error)}")
+                            logger.error(traceback.format_exc())
+                            flash('Error processing your login information. Please try again.', 'danger')
+                            return render_template('auth/login.html', form=form)
+                    else:
+                        # Formato desconhecido
+                        logger.error(f"Formato de resposta desconhecido: {response_data}")
+                        flash('Error processing your login. Please try again.', 'danger')
+                        return render_template('auth/login.html', form=form)
                 else:
                     logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                    flash('Erro ao processar seu login. Tente novamente.', 'danger')
+                    flash('Error processing your login. Please try again.', 'danger')
                     
             except Exception as e:
                 logger.error(f"Erro durante login: {str(e)}")
                 logger.error(traceback.format_exc())
-                flash('Ocorreu um erro durante o login. Por favor, tente novamente.', 'danger')
+                flash('An error occurred during login. Please try again.', 'danger')
         
         return render_template('auth/login.html', form=form)
     except Exception as e:
         logger.error(f"Erro no login: {str(e)}")
         logger.error(traceback.format_exc())
-        flash('Ocorreu um erro durante o login. Por favor, tente novamente.', 'danger')
+        flash('An error occurred during login. Please try again.', 'danger')
         return redirect(url_for('auth.login'))
 
 @auth_bp.route('/logout', methods=['GET', 'POST'])
@@ -174,7 +241,7 @@ def register():
                 
                 if not webhook_url:
                     logger.error("WEBHOOK_REGISTRATION não configurado")
-                    flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'danger')
+                    flash('Error in configuration. Please try again later.', 'danger')
                     return render_template('auth/register.html', form=form)
                 
                 # Preparar dados para o webhook
@@ -203,11 +270,43 @@ def register():
                 logger.info(f"Resposta: {response.text}")
 
                 if response.status_code == 200:
-                    flash('Enviamos um link de confirmação para seu email. Por favor, verifique sua caixa de entrada e spam.', 'success')
+                    # Verificar a resposta JSON
+                    try:
+                        response_data = response.json()
+                        
+                        # Verificar o status, independentemente se vier como objeto ou array
+                        status = None
+                        
+                        # Se for um array, pegar o status do primeiro item
+                        if isinstance(response_data, list) and len(response_data) > 0:
+                            status = response_data[0].get('status')
+                        # Se for um objeto direto, pegar o status dele
+                        elif isinstance(response_data, dict):
+                            status = response_data.get('status')
+                        
+                        logger.info(f"Status extraído da resposta: {status}")
+                        
+                        # Caso 1: Usuário já existe
+                        if status == 'false':
+                            logger.warning(f"Tentativa de registro com email já existente: {form.email.data}")
+                            flash('This email is already registered. Please use a different email or try to recover your password.', 'danger')
+                            return render_template('auth/register.html', form=form)
+                        
+                        # Caso 2: Registro realizado com sucesso
+                        elif status == 'success':
+                            logger.info(f"Usuário registrado com sucesso: {form.email.data}")
+                            flash('We have sent a confirmation link to your email. Please check your inbox and spam folder.', 'success')
+                            return render_template('auth/register.html', form=form, email_sent=True, email=form.email.data)
+                            
+                    except Exception as json_error:
+                        logger.error(f"Erro ao processar JSON da resposta: {str(json_error)}")
+                    
+                    # Caso padrão (se não conseguir processar o JSON ou se o formato for diferente)
+                    flash('We have sent a confirmation link to your email. Please check your inbox and spam folder.', 'success')
                     return render_template('auth/register.html', form=form, email_sent=True, email=form.email.data)
                 else:
                     logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                    flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+                    flash('Error processing your request. Please try again.', 'danger')
                     return render_template('auth/register.html', form=form)
                     
             except Exception as e:
@@ -347,23 +446,23 @@ def alternative_login():
                                 return redirect(url_for('main.index'))
                             else:
                                 logger.warning(f"Senha incorreta para login alternativo: {email}")
-                                flash('Senha incorreta', 'danger')
+                                flash('Invalid password', 'danger')
                         else:
                             logger.warning(f"Usuário não encontrado para login alternativo: {email}")
-                            flash('Email não encontrado', 'danger')
+                            flash('Email not found', 'danger')
                     except Exception as e:
                         logger.error(f"Erro no login alternativo: {str(e)}")
-                        flash('Erro ao tentar login. Por favor, tente novamente.', 'danger')
+                        flash('Error processing your login. Please try again.', 'danger')
                 except Exception as e:
                     logger.error(f"Erro não tratado no login alternativo: {str(e)}")
-                    flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+                    flash('An unexpected error occurred. Please try again later.', 'danger')
         
         # Renderizar template com formulário simples
         return render_template('auth/alt_login.html', form=form)
     except Exception as e:
         logger.error(f"Erro geral no login alternativo: {str(e)}")
         logger.error(traceback.format_exc())
-        flash('Erro inesperado. Tente novamente mais tarde.', 'danger')
+        flash('An unexpected error occurred. Please try again later.', 'danger')
         return redirect(url_for('main.index'))
 
 @auth_bp.route('/test-email', methods=['GET'])
@@ -420,7 +519,7 @@ def forgot_password():
         
         email = request.form.get('email')
         if not email:
-            flash('Por favor, digite seu email.', 'danger')
+            flash('Please enter your email.', 'danger')
             return redirect(url_for('auth.forgot_password'))
 
         try:
@@ -444,17 +543,17 @@ def forgot_password():
             logger.info(f"Resposta: {response.text}")
 
             if response.status_code == 200:
-                flash('Se o email estiver cadastrado, você receberá as instruções para redefinir sua senha.', 'success')
+                flash('If the email is registered, you will receive instructions to reset your password.', 'success')
                 return redirect(url_for('auth.login'))
             else:
                 logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+                flash('Error processing your request. Please try again.', 'danger')
                 return redirect(url_for('auth.forgot_password'))
 
         except Exception as e:
             logger.error(f"Erro: {str(e)}")
             logger.error(traceback.format_exc())
-            flash('Erro ao processar sua solicitação. Tente novamente.', 'danger')
+            flash('Error processing your request. Please try again.', 'danger')
             return redirect(url_for('auth.forgot_password'))
 
     return render_template('auth/forgot_password.html')
@@ -486,7 +585,7 @@ def reset_password():
         webhook_url = os.getenv('WEBHOOK_PASSWORD_RESET')
         if not webhook_url:
             logger.error("WEBHOOK_PASSWORD_RESET não configurado")
-            flash('Erro de configuração. Por favor, tente novamente mais tarde.', 'error')
+            flash('Error in configuration. Please try again later.', 'error')
             return redirect(url_for('auth.login'))
             
         try:
@@ -507,14 +606,14 @@ def reset_password():
             logger.info(f"Response text: {response.text}")
             
             if response.status_code == 200:
-                flash('Senha redefinida com sucesso! Faça login com sua nova senha.', 'success')
+                flash('Password reset successfully! Please log in with your new password.', 'success')
                 return redirect(url_for('auth.login'))
             else:
                 logger.error(f"Erro ao redefinir senha: {response.text}")
-                flash('Erro ao redefinir senha. Por favor, tente novamente.', 'error')
+                flash('Error resetting password. Please try again.', 'error')
                 return redirect(url_for('auth.login'))
                 
         except Exception as e:
             logger.error(f"Erro ao processar redefinição de senha: {str(e)}")
-            flash('Erro ao processar sua solicitação. Por favor, tente novamente.', 'error')
+            flash('Error processing your request. Please try again.', 'error')
             return redirect(url_for('auth.login')) 

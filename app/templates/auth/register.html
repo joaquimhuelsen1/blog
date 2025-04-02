@@ -13,6 +13,20 @@
                 <div class="card-body">
                     {% include '_messages.html' %}
                     
+                    {% if email_sent %}
+                    <div class="text-center py-4">
+                        <div class="mb-4">
+                            <i class="fas fa-envelope-open-text fa-4x text-success"></i>
+                        </div>
+                        <h4 class="mb-3">Confirmation Email Sent</h4>
+                        <p class="mb-3">A confirmation link has been sent to your email:</p>
+                        <p class="mb-4"><strong>{{ email }}</strong></p>
+                        <p>Please check your inbox and spam folder to complete your registration.</p>
+                        <div class="mt-4">
+                            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Go to Login</a>
+                        </div>
+                    </div>
+                    {% else %}
                     <form method="POST" action="{{ url_for('auth.register') }}">
                         <!-- CSRF desativado para resolver erros -->
                         
@@ -65,10 +79,13 @@
                             {{ form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
                         </div>
                     </form>
+                    {% endif %}
                 </div>
+                {% if not email_sent %}
                 <div class="card-footer">
                     <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -77,16 +94,18 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const togglePassword = document.querySelector('#togglePassword');
-    const password = document.querySelector('#password');
-    const confirmPassword = document.querySelector('#confirmPassword');
+    if (togglePassword) {
+        const password = document.querySelector('#password');
+        const confirmPassword = document.querySelector('#confirmPassword');
 
-    togglePassword.addEventListener('click', function() {
-        const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
-        password.setAttribute('type', type);
-        confirmPassword.setAttribute('type', type);
-        this.querySelector('i').classList.toggle('fa-eye');
-        this.querySelector('i').classList.toggle('fa-eye-slash');
-    });
+        togglePassword.addEventListener('click', function() {
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            confirmPassword.setAttribute('type', type);
+            this.querySelector('i').classList.toggle('fa-eye');
+            this.querySelector('i').classList.toggle('fa-eye-slash');
+        });
+    }
 });
 </script>
 {% endblock %} 

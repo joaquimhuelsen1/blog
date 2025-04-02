@@ -854,4 +854,27 @@ footer .social-links a {
     background-color: #f8f9fa;
     border-color: #dee2e6;
     box-shadow: 0 0 0 0.2rem rgba(198, 0, 0, 0.15);
+}
+
+/* Reconquest Test Banner Component */
+.reconquest-banner {
+    /* Adicione estilos aqui se necessário, como background, borda, etc. */
+    background-color: #F1F1F1; /* Cor de fundo cinza conforme solicitado */
+    border-left: 5px solid #C60000; /* Borda vermelha na esquerda */
+}
+
+.reconquest-banner-title {
+    /* Estilo para o título do banner */
+    font-weight: 600;
+    color: #C60000; /* Cor vermelha para o título */
+}
+
+.reconquest-banner-text {
+    /* Estilo para o texto do banner */
+    color: #000000; /* Cor preta para o texto descritivo */
+}
+
+.reconquest-banner-button {
+    /* Estilo para o botão, se precisar sobrescrever o padrão do Bootstrap */
+    /* Exemplo: background-color: #a50000; border-color: #a50000; */
 } 

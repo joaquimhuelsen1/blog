@@ -57,7 +57,7 @@ login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
 # Carregar variáveis de ambiente do .env
-load_dotenv()
+load_dotenv(override=True)
 
 def diagnose_connection(host, port=5432):
     """Função para diagnosticar problemas de conectividade com banco de dados"""
@@ -147,6 +147,19 @@ def create_app():
     
     app = Flask(__name__)
     app.config.from_object(Config)
+    
+    # Verificar se os webhooks estão configurados
+    logger.info("==== VERIFICANDO WEBHOOKS ====")
+    important_webhooks = [
+        'WEBHOOK_REGISTRATION', 'WEBHOOK_LOGIN', 'WEBHOOK_PASSWORD_RESET',
+        'WEBHOOK_GET_POSTS', 'WEBHOOK_RECONQUEST_TEST'
+    ]
+    for webhook in important_webhooks:
+        value = os.environ.get(webhook)
+        if value:
+            logger.info(f"✅ {webhook} configurado: {value}")
+        else:
+            logger.warning(f"⚠️ {webhook} NÃO ENCONTRADO!")
     
     # Registrar o filtro markdown_to_html
     from app.utils import markdown_to_html
@@ -407,24 +420,25 @@ def create_app():
             return render_template('errors/500.html', error=str(e)), 500
         except Exception as template_error:
             logger.error(f"❌ ERRO AO RENDERIZAR TEMPLATE DE ERRO: {str(template_error)}")
-            # Resposta HTML mínima sem depender de templates
-            html = f"""
+            # Criar resposta de emergência como último recurso
+            html = """
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Erro interno - Blog Reconquista</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Internal Server Error - Reconquest Blog</title>
                 <style>
-                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                    h1 {{ font-size: 48px; margin-bottom: 10px; }}
-                    .container {{ max-width: 800px; margin: 0 auto; }}
+                    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+                    .error-container { max-width: 800px; margin: 40px auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px; }
+                    h2 { color: #C60000; border-bottom: 1px solid #eee; padding-bottom: 10px; }
                 </style>
             </head>
             <body>
-                <div class="container">
-                    <h1>500</h1>
-                    <h2>Erro interno do servidor</h2>
-                    <p>Ocorreu um erro inesperado. Nossa equipe foi notificada.</p>
-                    <p><a href="/">Voltar para a página inicial</a></p>
+                <div class="error-container">
+                    <h2>Internal Server Error</h2>
+                    <p>An unexpected error occurred. Our team has been notified.</p>
+                    <a href="/">Return to home page</a>
                 </div>
             </body>
             </html>

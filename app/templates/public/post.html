@@ -561,19 +561,7 @@
                     
                     <!-- Personalized Coaching Section -->
                     <section class="mt-5 pt-4 border-top">
-                        <div class="card mb-4 coaching-banner">
-                            <div class="card-body p-4">
-                                <div class="row align-items-center">
-                                    <div class="col-md-8">
-                                        <h3 class="mb-3">Let's Find Out What Kind Of Chance You Have With Your Ex</h3>
-                                        <p class="mb-md-0">My name is Ethan Heyes and I'm a specialist in helping couples reunite after breakups. Take my test to find out where you stand.</p>
-                                    </div>
-                                    <div class="col-md-4 text-center text-md-end">
-                                        <a href="{{ url_for('main.teste_de_reconquista') }}" class="btn btn-lg btn-primary px-4 py-2">Take the test</a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        {% include 'public/components/reconquest_test_banner.html' %}
                     </section>
                     
                     <!-- Recent Posts Section -->

@@ -128,7 +128,7 @@ def ia_relacionamento():
             if not current_user.is_authenticated:
                 return jsonify({
                     'success': False,
-                    'error': "Você precisa estar logado para enviar mensagens.",
+                    'error': "You need to be logged in to send messages.",
                     'redirect': url_for('auth.login')
                 })
             
@@ -136,7 +136,7 @@ def ia_relacionamento():
             if not current_user.is_premium and not current_user.is_admin:
                 return jsonify({
                     'success': False,
-                    'error': "Este recurso é exclusivo para usuários premium.",
+                    'error': "This feature is exclusive for premium users.",
                     'redirect': url_for('main.premium_subscription')
                 })
             
@@ -150,7 +150,7 @@ def ia_relacionamento():
                 print("Mensagem vazia ou inválida recebida")
                 return jsonify({
                     'success': False,
-                    'error': "Por favor, digite uma mensagem válida."
+                    'error': "Please enter a valid message."
                 })
             
             # Variável para armazenar a resposta do assistente
