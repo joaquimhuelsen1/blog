@@ -16,6 +16,7 @@ import os
 import secrets
 import uuid
 import hashlib
+from werkzeug.security import generate_password_hash
 
 # Configurar logging
 logging.basicConfig(
@@ -543,22 +544,8 @@ def forgot_password():
             logger.info(f"Resposta: {response.text}")
 
             if response.status_code == 200:
-                response_data = response.json()
-                
-                # Verificar o status retornado pelo webhook
-                if response_data.get('status') == 'success':
-                    logger.info(f"Status success recebido do webhook, email: {email}")
-                    flash('If the email is registered, you will receive instructions to reset your password.', 'success')
-                    return render_template('auth/forgot_password.html', email_sent=True, email=email)
-                elif response_data.get('status') == 'false':
-                    logger.warning(f"Status false recebido do webhook, email não registrado: {email}")
-                    flash('This email is not registered in our system. Please check your email or register a new account.', 'danger')
-                    return render_template('auth/forgot_password.html')
-                else:
-                    # Caso o status não seja reconhecido
-                    logger.warning(f"Status desconhecido recebido do webhook: {response_data}")
-                    flash('If the email is registered, you will receive instructions to reset your password.', 'success')
-                    return render_template('auth/forgot_password.html', email_sent=True, email=email)
+                flash('If the email is registered, you will receive instructions to reset your password.', 'success')
+                return render_template('auth/forgot_password.html', email_sent=True, email=email)
             else:
                 logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
                 flash('Error processing your request. Please try again.', 'danger')
@@ -631,3 +618,144 @@ def reset_password():
             logger.error(f"Erro ao processar redefinição de senha: {str(e)}")
             flash('Error processing your request. Please try again.', 'error')
             return redirect(url_for('auth.login')) 
+
+@auth_bp.route('/create-password', methods=['GET', 'POST'])
+def create_password():
+    # Initialize variables with minimal logging
+    logger.info("Accessing create-password route")
+    
+    # Get token from all possible sources with priority to access_token
+    access_token = request.args.get('access_token', '') or request.form.get('access_token', '')
+    token = request.args.get('token', '') or request.form.get('token', '')
+    
+    # Use access_token if available, or token as fallback
+    final_token = access_token or token
+    
+    # Verify we have a valid token
+    if not final_token:
+        logger.warning("Attempt to access create-password route without token")
+        flash('Verification token not provided. Please check your email and click the link provided.', 'danger')
+        return render_template('auth/create_password.html', token_missing=True)
+    
+    # Log token detection (only first few characters for security)
+    token_preview = final_token[:10] if len(final_token) > 10 else final_token
+    logger.info(f"Token detected (first chars): '{token_preview}...'")
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate password
+        if not password:
+            flash('Password is required.', 'danger')
+            return render_template('auth/create_password.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return render_template('auth/create_password.html')
+        
+        if len(password) < 6:
+            flash('Password must be at least 6 characters long.', 'danger')
+            return render_template('auth/create_password.html')
+        
+        # Find the appropriate webhook
+        webhook_url = None
+        preferred_webhooks = [
+            'WEBHOOK_PASSWORD_CREATE',
+            'WEBHOOK_CREATE_PASSWORD', 
+            'WEBHOOK_PASSWORD_RESET',
+            'WEBHOOK_RESET_PASSWORD',
+            'WEBHOOK_PASSWORD',
+            'WEBHOOK_LOGIN'
+        ]
+        
+        for webhook_name in preferred_webhooks:
+            url = os.environ.get(webhook_name)
+            if url:
+                logger.info(f"Using webhook {webhook_name}")
+                webhook_url = url
+                break
+        
+        if not webhook_url:
+            # Additional attempt - search webhook with partial name
+            all_env_vars = os.environ.keys()
+            webhook_vars = [var for var in all_env_vars if 'WEBHOOK' in var.upper()]
+            
+            for env_var in webhook_vars:
+                if 'PASSWORD' in env_var.upper() or 'CREATE' in env_var.upper():
+                    url = os.environ.get(env_var)
+                    if url:
+                        logger.info(f"Using alternative webhook {env_var}")
+                        webhook_url = url
+                        break
+            
+            if not webhook_url:
+                logger.error("No webhook configured for password creation/reset! Check .env")
+                flash('Server configuration error. Please contact administrator.', 'danger')
+                return render_template('auth/create_password.html')
+        
+        # Send to webhook
+        try:
+            import requests
+            
+            # Prepare data - plain password as requested
+            payload = {
+                'password': password,  # Plain password (not hashed)
+                'access_token': final_token
+            }
+            
+            logger.info(f"Sending data to webhook")
+            
+            # Send with short timeout
+            response = requests.post(webhook_url, json=payload, timeout=10)
+            logger.info(f"Webhook response: {response.status_code}")
+            
+            # Try to parse JSON response
+            try:
+                response_data = response.json()
+                status = response_data.get('status')
+                # If email was identified in response, use it for success page
+                email = response_data.get('email', '')
+                logger.info(f"Response status: {status}")
+                
+                if status == 'success':
+                    # Password changed successfully
+                    flash('Password created successfully! You can now log in.', 'success')
+                    return render_template('auth/password_success.html', email=email)
+                
+                elif status == 'false':
+                    # Token expired or invalid
+                    error_message = "Token expired! You need to request a new email to create your password."
+                    flash(error_message, 'danger')
+                    return render_template('auth/create_password.html', error_message=error_message, token_expired=True)
+                
+                else:
+                    # Unknown status - check HTTP code
+                    if response.status_code in [200, 201, 202]:
+                        # If HTTP code is success, even without explicit status, consider success
+                        flash('Password created successfully! You can now log in.', 'success')
+                        return render_template('auth/password_success.html', email=email)
+                    else:
+                        # Unknown error
+                        logger.error(f"Webhook error: {response.status_code}")
+                        flash(f'Error creating password: {response.status_code}. Please try again or contact support.', 'danger')
+                
+            except ValueError:
+                # Response is not JSON - check HTTP code
+                if response.status_code in [200, 201, 202]:
+                    # Even without valid JSON, consider success by HTTP code
+                    flash('Password created successfully! You can now log in.', 'success')
+                    return render_template('auth/password_success.html')
+                else:
+                    logger.error(f"Webhook error (response not JSON): {response.status_code}")
+                    flash(f'Error creating password: {response.status_code}. Please try again or contact support.', 'danger')
+        
+        except requests.RequestException as e:
+            logger.error(f"Error connecting to webhook: {str(e)}")
+            flash('Could not connect to the service. Please check your connection and try again.', 'danger')
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            flash('An unexpected error occurred. Please try again or contact support.', 'danger')
+    
+    # GET or POST with error
+    return render_template('auth/create_password.html') 
