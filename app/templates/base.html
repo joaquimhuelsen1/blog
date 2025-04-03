@@ -68,27 +68,10 @@
                         </a>
                     </li>
                     
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint == 'main.all_posts' %}active{% endif %}" href="#" id="postsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint == 'main.all_posts' %}active{% endif %}" href="/posts?type=all">
                             <i class="fas fa-newspaper"></i> Posts
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="postsDropdown">
-                            <li>
-                                <a class="dropdown-item" href="/posts?type=all">
-                                    <i class="fas fa-list"></i> All Posts
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/posts?type=free">
-                                    <i class="fas fa-unlock"></i> Free Posts
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="/posts?type=premium">
-                                    <i class="fas fa-crown"></i> Premium Posts
-                                </a>
-                            </li>
-                        </ul>
                     </li>
                     
                     <li class="nav-item">

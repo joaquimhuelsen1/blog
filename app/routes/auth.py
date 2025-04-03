@@ -109,14 +109,34 @@ def login():
                             for header_name, header_value in response.headers.items():
                                 logger.info(f"  {header_name}: {header_value}")
                             
-                            # Extrair dados do cabeçalho
-                            user_id = response.headers.get('X-User-Id')
-                            username = response.headers.get('X-User-Username')
-                            email = response.headers.get('X-User-Email', form.email.data)
-                            is_admin = response.headers.get('X-User-IsAdmin', 'false').lower() == 'true'
-                            is_premium = response.headers.get('X-User-IsPremium', 'false').lower() == 'true'
-                            age = response.headers.get('X-User-Age')
-                            ai_credits = int(response.headers.get('X-User-AiCredits', '0'))
+                            # Extrair dados do cabeçalho - use a forma correta para acessar os headers
+                            # Os headers estão vindo com nomes não padronizados, então vamos verificar de forma case-insensitive
+                            headers_dict = {k.lower(): v for k, v in response.headers.items()}
+                            
+                            # Obter dados usando nomes case-insensitive
+                            user_id = headers_dict.get('id') or headers_dict.get('x-user-id')
+                            username = headers_dict.get('username') or headers_dict.get('x-user-username')
+                            email = headers_dict.get('email') or headers_dict.get('x-user-email', form.email.data)
+                            is_admin_str = headers_dict.get('is_admin') or headers_dict.get('x-user-isadmin', 'false')
+                            is_premium_str = headers_dict.get('is_premium') or headers_dict.get('x-user-ispremium', 'false')
+                            age_str = headers_dict.get('age') or headers_dict.get('x-user-age')
+                            ai_credits_str = headers_dict.get('ai_credits') or headers_dict.get('x-user-aicredits', '0')
+                            
+                            # Converter strings para tipos apropriados
+                            is_admin = is_admin_str.lower() == 'true'
+                            is_premium = is_premium_str.lower() == 'true'
+                            age = int(age_str) if age_str and age_str.isdigit() else None
+                            ai_credits = int(ai_credits_str) if ai_credits_str and ai_credits_str.isdigit() else 0
+                            
+                            # Log dos dados extraídos dos headers
+                            logger.info(f"Dados extraídos dos headers:")
+                            logger.info(f"  ID: {user_id}")
+                            logger.info(f"  Username: {username}")
+                            logger.info(f"  Email: {email}")
+                            logger.info(f"  Is Admin: {is_admin}")
+                            logger.info(f"  Is Premium: {is_premium}")
+                            logger.info(f"  Age: {age}")
+                            logger.info(f"  AI Credits: {ai_credits}")
                             
                             # Log do corpo da resposta
                             logger.info(f"Corpo da resposta: {response_data}")
@@ -173,7 +193,7 @@ def login():
                             login_user(user, remember=form.remember_me.data)
                             logger.info(f"Login bem-sucedido para: {user.email} (ID: {user.id})")
                             
-                            # Armazenar dados do usuário na sessão
+                            # Armazenar dados do usuário na sessão em detalhes
                             session['user_data'] = {
                                 'id': str(user.id),
                                 'username': user.username,
@@ -181,8 +201,13 @@ def login():
                                 'is_admin': user.is_admin,
                                 'is_premium': user.is_premium,
                                 'age': user.age,
-                                'ai_credits': user.ai_credits
+                                'ai_credits': user.ai_credits,
+                                # Armazenar headers originais para referência e debug
+                                'auth_headers': dict(headers_dict)
                             }
+                            
+                            # Log dos dados salvos na sessão
+                            logger.info(f"Dados salvos na sessão: {session['user_data']}")
                             
                             next_page = request.args.get('next')
                             if not next_page or urlparse(next_page).netloc != '':
@@ -326,28 +351,211 @@ def register():
 @login_required
 def profile():
     try:
+        # Usar informações da sessão para garantir consistência
+        user_data_from_session = session.get('user_data', {})
+        logger.info(f"Dados do usuário da sessão: {user_data_from_session}")
+        
         form = ProfileUpdateForm(original_username=current_user.username, original_email=current_user.email)
-        password_form = PasswordChangeForm()
         
         if form.validate_on_submit():
-            current_user.username = form.username.data
-            current_user.email = form.email.data
-            current_user.age = form.age.data
+            # Obter URL do webhook
+            webhook_url = os.environ.get('WEBHOOK_EDIT_PERFIL')
             
-            db.session.commit()
-            flash('Your profile has been updated!', 'success')
-            return redirect(url_for('auth.profile'))
+            if not webhook_url:
+                logger.error("WEBHOOK_EDIT_PERFIL não está definido no .env")
+                flash('Server configuration error. Please contact administrator.', 'danger')
+                return render_template('auth/profile.html', form=form, user_info=get_user_info(user_data_from_session))
+            
+            # Obter o e-mail e ID da sessão (mais confiável)
+            email_from_session = user_data_from_session.get('email', current_user.email)
+            user_id_from_session = user_data_from_session.get('id', current_user.id)
+            username_from_session = user_data_from_session.get('username', current_user.username)
+            
+            # Preparar dados para enviar ao webhook
+            user_data = {
+                'user_id': user_id_from_session,
+                'username': username_from_session,  # Username não editável, usar o da sessão
+                'email': email_from_session,  # Email não editável, usar o da sessão
+                'age': form.age.data,  # Apenas idade é editável
+                'current_username': current_user.username,
+                'current_email': email_from_session,
+                'session_data': {
+                    'id': user_id_from_session,
+                    'username': username_from_session,
+                    'email': email_from_session,
+                    'is_premium': user_data_from_session.get('is_premium', current_user.is_premium),
+                    'is_admin': user_data_from_session.get('is_admin', current_user.is_admin),
+                    'age': user_data_from_session.get('age', current_user.age)
+                }
+            }
+            
+            logger.info(f"Enviando dados do perfil para webhook: {webhook_url}")
+            logger.info(f"Payload enviado: {user_data}")
+            
+            try:
+                # Enviar para o webhook
+                import requests
+                response = requests.post(
+                    webhook_url.strip(),
+                    json=user_data,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=10
+                )
+                
+                logger.info(f"Status da resposta: {response.status_code}")
+                logger.info(f"Headers da resposta: {dict(response.headers)}")
+                
+                # Processar a resposta
+                if response.status_code == 200:
+                    try:
+                        resp_data = response.json()
+                        logger.info(f"Resposta JSON: {resp_data}")
+                        status = resp_data.get('status')
+                        
+                        if status == 'success':
+                            # Atualizar perfil com todas as informações retornadas pelo webhook
+                            # Processar dados do usuário recebidos na resposta
+                            user_data_from_response = resp_data.get('user', {})
+                            
+                            # Se não houver campo 'user', verificar outros formatos
+                            if not user_data_from_response:
+                                # Verificar se é um array e pegar o primeiro item
+                                if isinstance(resp_data, list) and len(resp_data) > 0:
+                                    user_data_from_response = resp_data[0]
+                                # Se for um dicionário direto, usar como está
+                                elif isinstance(resp_data, dict):
+                                    user_data_from_response = resp_data
+                            
+                            logger.info(f"Dados do usuário recebidos do webhook: {user_data_from_response}")
+                            
+                            # Atualizar a idade localmente
+                            new_age = form.age.data
+                            if user_data_from_response and 'age' in user_data_from_response:
+                                # Se o webhook retornou a idade, usar essa
+                                new_age = user_data_from_response.get('age', form.age.data)
+                                
+                            current_user.age = new_age
+                            
+                            # Se houver mais informações retornadas, atualizar na sessão
+                            if user_data_from_response:
+                                if 'user_data' not in session:
+                                    session['user_data'] = {}
+                                
+                                # Atualizar todos os campos retornados
+                                for key, value in user_data_from_response.items():
+                                    if key != 'password' and key != 'password_hash':  # Não armazenar senha na sessão
+                                        session['user_data'][key] = value
+                                
+                                # Garantir que a idade foi atualizada
+                                session['user_data']['age'] = new_age
+                                session.modified = True
+                                
+                                logger.info(f"Sessão atualizada com dados do usuário: {session['user_data']}")
+                            else:
+                                # Se não houver dados extras, atualizar apenas a idade
+                                if 'user_data' in session:
+                                    session['user_data']['age'] = new_age
+                                    session.modified = True
+                            
+                            # Commit das alterações
+                            db.session.commit()
+                            
+                            # Usar flash com categoria 'success'
+                            flash('Perfil atualizado com sucesso!', 'success')
+                            return redirect(url_for('auth.profile'))
+                        else:
+                            # Garantir que qualquer resposta com status que não seja exatamente 'success'
+                            # seja interpretada corretamente
+                            
+                            # Verificar se existe algum indicador de sucesso na resposta
+                            success_indicators = [
+                                resp_data.get('success') == True,
+                                resp_data.get('status') == True, 
+                                resp_data.get('success') == 'true',
+                                resp_data.get('ok') == True
+                            ]
+                            
+                            if any(success_indicators):
+                                # Temos algum indicador de sucesso, tratar como sucesso
+                                # Atualizar apenas a idade do usuário
+                                current_user.age = form.age.data
+                                
+                                if 'user_data' in session:
+                                    session['user_data']['age'] = form.age.data
+                                    session.modified = True
+                                
+                                # Commit das alterações
+                                db.session.commit()
+                                
+                                flash('Perfil atualizado com sucesso!', 'success')
+                                return redirect(url_for('auth.profile'))
+                            else:
+                                # Status false - erro no webhook
+                                message = resp_data.get('message', 'Error updating profile. Please try again.')
+                                if resp_data.get('status') == 'false':
+                                    flash(f'Erro: {message}', 'danger')
+                                else:
+                                    # Se não tiver status explícito de falha, tentar processar como sucesso
+                                    try:
+                                        # Atualizar apenas a idade
+                                        current_user.age = form.age.data
+                                        
+                                        if 'user_data' in session:
+                                            session['user_data']['age'] = form.age.data
+                                            session.modified = True
+                                        
+                                        # Commit das alterações
+                                        db.session.commit()
+                                        
+                                        flash('Perfil atualizado com sucesso!', 'success')
+                                        return redirect(url_for('auth.profile'))
+                                    except Exception as update_error:
+                                        logger.error(f"Erro ao atualizar perfil: {str(update_error)}")
+                                        flash(f'Erro: {message}', 'danger')
+                                
+                                return render_template('auth/profile.html', form=form, user_info=get_user_info(user_data_from_session))
+                    except ValueError:
+                        # Não conseguiu parsear JSON
+                        logger.error("Erro ao processar resposta JSON do webhook")
+                        flash('Error processing server response. Please try again.', 'danger')
+                else:
+                    logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
+                    flash('Error communicating with server. Please try again later.', 'danger')
+            
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Erro ao conectar ao webhook: {str(e)}")
+                flash('Connection error. Please check your internet connection and try again.', 'danger')
+            except Exception as e:
+                logger.error(f"Erro inesperado ao processar atualização de perfil: {str(e)}")
+                flash('An unexpected error occurred. Please try again later.', 'danger')
+                
         elif request.method == 'GET':
-            form.username.data = current_user.username
-            form.email.data = current_user.email
-            form.age.data = current_user.age
+            # Populate form with user data, prioritizing session data
+            username_from_session = user_data_from_session.get('username')
+            if username_from_session:
+                form.username.data = username_from_session
+            else:
+                form.username.data = current_user.username
+                
+            form.email.data = user_data_from_session.get('email', current_user.email)
+            form.age.data = user_data_from_session.get('age', current_user.age)
         
-        return render_template('auth/profile.html', form=form, password_form=password_form)
+        return render_template('auth/profile.html', form=form, user_info=get_user_info(user_data_from_session))
     except Exception as e:
         logger.error(f"ERROR in profile route: {str(e)}")
         db.session.rollback()
         flash('An error occurred while updating your profile. Please try again.', 'danger')
         return redirect(url_for('main.index'))
+
+# Função auxiliar para obter informações do usuário
+def get_user_info(user_data_from_session):
+    """Obter informações do usuário da sessão ou do modelo"""
+    return {
+        'email': user_data_from_session.get('email', current_user.email),
+        'username': user_data_from_session.get('username', current_user.username),
+        'is_premium': user_data_from_session.get('is_premium', current_user.is_premium),
+        'session_data': user_data_from_session
+    }
 
 @auth_bp.route('/change-password', methods=['POST'])
 @login_required
@@ -499,24 +707,18 @@ def test_email():
 
 @auth_bp.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    """Rota para solicitar redefinição de senha"""
+    """Rota para solicitar redefinição de senha via OTP"""
     if request.method == 'POST':
-        # Log de todas as variáveis de ambiente
-        logger.info("=== DEBUG VARIÁVEIS DE AMBIENTE ===")
-        for key in os.environ:
-            if 'WEBHOOK' in key:
-                logger.info(f"{key}: {os.environ[key]}")
-        logger.info("=================================")
+        logger.info("Processando solicitação de redefinição de senha via OTP")
         
-        # Tentar obter a URL do webhook de várias formas
-        webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET')
-        logger.info(f"URL do webhook do .env: {webhook_url}")
+        # Obter URL do webhook
+        webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET_OTP')
         
         # Verificar se a variável existe e tem conteúdo
         if not webhook_url:
-            logger.error("WEBHOOK_PASSWORD_RESET não está definido no .env")
-            webhook_url = "https://backend.reconquestyourex.com/webhook-test/password-reset"  # Fallback
-            logger.info(f"Usando URL de fallback: {webhook_url}")
+            logger.error("WEBHOOK_PASSWORD_RESET_OTP não está definido no .env")
+            flash('Server configuration error. Please contact administrator.', 'danger')
+            return redirect(url_for('auth.forgot_password'))
         
         email = request.form.get('email')
         if not email:
@@ -527,41 +729,148 @@ def forgot_password():
             # Enviar dados para webhook
             webhook_data = {
                 'email': email,
-                'event': 'forgot_password'
+                'event': 'forgot_password_otp'
             }
 
             logger.info(f"Enviando requisição para: {webhook_url}")
-            logger.info(f"Dados: {webhook_data}")
-
+            
             response = requests.post(
-                webhook_url.strip(),  # Remover possíveis espaços em branco
+                webhook_url.strip(),
                 json=webhook_data,
                 headers={'Content-Type': 'application/json'},
                 timeout=10
             )
             
             logger.info(f"Status: {response.status_code}")
-            logger.info(f"Resposta: {response.text}")
-
+            
+            # Verificar resposta
             if response.status_code == 200:
-                flash('If the email is registered, you will receive instructions to reset your password.', 'success')
-                return render_template('auth/forgot_password.html', email_sent=True, email=email)
+                try:
+                    # Tentar obter JSON da resposta
+                    resp_data = response.json()
+                    status = resp_data.get('status')
+                    
+                    if status == 'success' or status == True:
+                        flash('Verification code sent! Check your email to complete the process.', 'success')
+                        # Redirecionar diretamente para a página de verificação OTP
+                        return redirect(url_for('auth.verify_otp', email=email))
+                    else:
+                        message = resp_data.get('message', 'Unknown error occurred.')
+                        flash(f'Error: {message}', 'danger')
+                        logger.error(f"Erro reportado pelo webhook: {message}")
+                        return render_template('auth/forgot_password.html')
+                except:
+                    # Se não conseguir obter JSON, considerar sucesso pelo status HTTP
+                    flash('Verification code sent! Check your email to complete the process.', 'success')
+                    # Redirecionar diretamente para a página de verificação OTP
+                    return redirect(url_for('auth.verify_otp', email=email))
+                
             else:
-                logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                flash('Error processing your request. Please try again.', 'danger')
-                return redirect(url_for('auth.forgot_password'))
+                logger.error(f"Erro do webhook: {response.status_code}")
+                flash('Error processing your request. Please try again later.', 'danger')
+                return render_template('auth/forgot_password.html')
 
         except Exception as e:
-            logger.error(f"Erro: {str(e)}")
-            logger.error(traceback.format_exc())
-            flash('Error processing your request. Please try again.', 'danger')
-            return redirect(url_for('auth.forgot_password'))
+            logger.error(f"Erro ao processar solicitação: {str(e)}")
+            flash('Error processing your request. Please try again later.', 'danger')
+            return render_template('auth/forgot_password.html')
 
     return render_template('auth/forgot_password.html')
 
+@auth_bp.route('/verify-otp/<email>', methods=['GET', 'POST'])
+def verify_otp(email):
+    """Rota para verificar OTP e definir nova senha"""
+    if not email:
+        flash('Email not provided. Please try again.', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+    
+    if request.method == 'POST':
+        # Obter dados do formulário
+        otp_code = request.form.get('otp_code')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validar entradas
+        if not otp_code:
+            flash('Verification code is required.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+        
+        if not new_password:
+            flash('New password is required.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+            
+        if new_password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+            
+        if len(new_password) < 6:
+            flash('Password must be at least 6 characters long.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+        
+        # Obter URL do webhook
+        webhook_url = os.environ.get('WEBHOOK_PASSWORD_CREATE_OTP')
+        
+        # Verificar se a variável existe e tem conteúdo
+        if not webhook_url:
+            logger.error("WEBHOOK_PASSWORD_CREATE_OTP não está definido no .env")
+            flash('Server configuration error. Please contact administrator.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+            
+        try:
+            # Preparar dados para enviar ao webhook
+            webhook_data = {
+                'email': email,
+                'otp': otp_code,
+                'password': new_password,  # Enviar senha em texto puro conforme solicitado
+                'event': 'verify_otp_reset_password'
+            }
+            
+            logger.info(f"Enviando verificação OTP para: {webhook_url}")
+            
+            response = requests.post(
+                webhook_url.strip(),
+                json=webhook_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            
+            logger.info(f"Status: {response.status_code}")
+            
+            # Processar resposta
+            if response.status_code == 200:
+                try:
+                    # Tentar obter JSON da resposta
+                    resp_data = response.json()
+                    status = resp_data.get('status')
+                    
+                    if status == 'success' or status == True:
+                        flash('Your password has been reset successfully!', 'success')
+                        return render_template('auth/password_reset_success.html')
+                    else:
+                        message = resp_data.get('message', 'Invalid or expired verification code.')
+                        flash(f'Error: {message}', 'danger')
+                        logger.error(f"Erro reportado pelo webhook: {message}")
+                        return render_template('auth/verify_otp.html', email=email)
+                except:
+                    # Se não conseguir obter JSON, considerar sucesso pelo status HTTP
+                    flash('Your password has been reset successfully!', 'success')
+                    return render_template('auth/password_reset_success.html')
+            else:
+                logger.error(f"Erro do webhook: {response.status_code}")
+                flash('Invalid or expired verification code. Please try again.', 'danger')
+                return render_template('auth/verify_otp.html', email=email)
+                
+        except Exception as e:
+            logger.error(f"Erro ao processar verificação OTP: {str(e)}")
+            flash('Error processing your request. Please try again later.', 'danger')
+            return render_template('auth/verify_otp.html', email=email)
+            
+    # GET request - exibir formulário
+    return render_template('auth/verify_otp.html', email=email)
+
 @auth_bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
-    """Rota para redefinição de senha"""
+    """Rota para redefinição de senha via token (método antigo - mantido para compatibilidade)"""
     if request.method == 'GET':
         # Log detalhado para debug
         logger.info("GET /reset-password")

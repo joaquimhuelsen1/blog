@@ -10,12 +10,25 @@
                 <h4 class="m-0" style="color: #000000; font-weight: 500;">Edit Profile</h4>
             </div>
             <div class="card-body">
+                <!-- Premium Status Section -->
+                <div class="mb-4 text-center">
+                    {% if user_info.is_premium %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-crown fa-2x mb-2"></i>
+                            <h5>Conta Premium</h5>
+                            <p class="mb-0">Você tem acesso a todo o conteúdo premium.</p>
+                            <p class="mb-0">Obrigado por apoiar nossa plataforma!</p>
+                        </div>
+                    {% endif %}
+                </div>
+                
                 <form method="POST" action="{{ url_for('auth.profile') }}">
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
                         {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control") }}
+                        {{ form.username(class="form-control", readonly=true, style="background-color: #f8f9fa;") }}
+                        <small class="form-text text-muted">Nome de usuário não pode ser alterado.</small>
                         {% for error in form.username.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}
@@ -23,7 +36,8 @@
                     
                     <div class="mb-3">
                         {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control") }}
+                        {{ form.email(class="form-control", readonly=true, style="background-color: #f8f9fa;") }}
+                        <small class="form-text text-muted">Email não pode ser alterado.</small>
                         {% for error in form.email.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}
@@ -32,75 +46,22 @@
                     <div class="mb-3">
                         {{ form.age.label(class="form-label") }}
                         {{ form.age(class="form-control", type="number", min="18", max="120") }}
+                        <small class="form-text text-muted">Apenas sua idade pode ser atualizada.</small>
                         {% for error in form.age.errors %}
                             <span class="text-danger">{{ error }}</span>
                         {% endfor %}
-                        <small class="form-text text-muted">{{ form.age.description }}</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {% if current_user.is_premium %}
-                            <div class="alert alert-success">
-                                <i class="fas fa-star"></i> You are a Premium User.
-                                <p class="mb-0">Thank you for supporting our content!</p>
-                            </div>
-                        {% else %}
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle"></i> You are using our free plan.
-                                <p class="mb-0">Consider <a href="{{ url_for('main.premium_subscription') }}">upgrading to Premium</a> to get access to exclusive content.</p>
-                            </div>
-                        {% endif %}
                     </div>
                     
                     <div class="d-grid">
-                        {{ form.submit(class="btn", style="background-color: #C60000; color: white;") }}
+                        {{ form.submit(class="btn", style="background-color: #C60000; color: white;", value="Atualizar Perfil") }}
                     </div>
                 </form>
                 
-                <!-- Formulário de alteração de senha -->
-                <hr class="my-4">
-                <h5>Change Password</h5>
-                <form method="POST" action="{{ url_for('auth.change_password') }}">
-                    {% if password_form %}
-                        {{ password_form.hidden_tag() }}
-                        
-                        <div class="mb-3">
-                            {{ password_form.current_password.label(class="form-label") }}
-                            {{ password_form.current_password(class="form-control") }}
-                            {% for error in password_form.current_password.errors %}
-                                <span class="text-danger">{{ error }}</span>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="mb-3">
-                            {{ password_form.new_password.label(class="form-label") }}
-                            {{ password_form.new_password(class="form-control") }}
-                            {% for error in password_form.new_password.errors %}
-                                <span class="text-danger">{{ error }}</span>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="mb-3">
-                            {{ password_form.confirm_password.label(class="form-label") }}
-                            {{ password_form.confirm_password(class="form-control") }}
-                            {% for error in password_form.confirm_password.errors %}
-                                <span class="text-danger">{{ error }}</span>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="d-grid">
-                            {{ password_form.submit(class="btn btn-warning") }}
-                        </div>
-                    {% else %}
-                        <div class="alert alert-warning">
-                            Password change form is temporarily unavailable. Please try again later.
-                        </div>
-                    {% endif %}
-                </form>
+                <!-- Seção de alteração de senha temporariamente removida -->
             </div>
             <div class="card-footer">
                 <div class="text-center mt-2">
-                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Back to blog</a>
+                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Voltar para o blog</a>
                 </div>
             </div>
         </div>

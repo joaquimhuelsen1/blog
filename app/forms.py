@@ -96,11 +96,9 @@ class UserUpdateForm(FlaskForm):
     submit = SubmitField('Update User')
 
 class ProfileUpdateForm(FlaskForm):
-    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
-    email = StringField('Email', validators=[DataRequired(), Email()])
+    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)], render_kw={'readonly': True})
+    email = StringField('Email', validators=[DataRequired(), Email()], render_kw={'readonly': True})
     age = IntegerField('Age', validators=[Optional()])
-    password = PasswordField('New password', validators=[Optional(), Length(min=6)])
-    confirm_password = PasswordField('Confirm new password', validators=[Optional(), EqualTo('password', message='Passwords must match')])
     submit = SubmitField('Update Profile')
     
     def __init__(self, original_username=None, original_email=None, *args, **kwargs):
@@ -108,17 +106,7 @@ class ProfileUpdateForm(FlaskForm):
         self.original_username = original_username
         self.original_email = original_email
     
-    def validate_username(self, username):
-        if username.data != self.original_username:
-            user = User.query.filter_by(username=username.data).first()
-            if user:
-                raise ValidationError('This username is already taken. Please choose a different one.')
-    
-    def validate_email(self, email):
-        if email.data != self.original_email:
-            user = User.query.filter_by(email=email.data).first()
-            if user:
-                raise ValidationError('This email address is already registered. Please use a different email address.')
+    # Username and Email validation is skipped since the fields are readonly
 
 class CommentForm(FlaskForm):
     content = TextAreaField('Comment', validators=[DataRequired(), Length(min=5, max=1000)])
