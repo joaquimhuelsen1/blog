@@ -459,10 +459,6 @@ def enviar_teste():
                     
                     # Store the submission locally if webhook fails
                     # Save a copy in a local file for backup
-                    import json
-                    import os
-                    from datetime import datetime
-                    
                     data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
                     os.makedirs(data_dir, exist_ok=True)
                     

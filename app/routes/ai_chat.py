@@ -88,13 +88,13 @@ def ia_relacionamento():
     is_local = 'localhost' in request.host or '127.0.0.1' in request.host
     print(f"Executando em ambiente local: {is_local}")
     
-    # Verificar se o usuário está autenticado e é premium
-    can_access_ai = current_user.is_authenticated and (current_user.is_premium or current_user.is_admin)
+    # Verificar se o usuário está autenticado e é administrador
+    can_access_ai = current_user.is_authenticated and current_user.is_admin
     
-    # Bloquear acesso para usuários não premium
+    # Bloquear acesso para usuários não administradores
     if not can_access_ai:
-        flash('Este recurso de IA é exclusivo para usuários premium.', 'info')
-        return redirect(url_for('main.premium_subscription'))
+        flash('Este recurso de IA é exclusivo para administradores do sistema.', 'warning')
+        return redirect(url_for('main.index'))
     
     # Verificar se é uma requisição AJAX
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -132,12 +132,12 @@ def ia_relacionamento():
                     'redirect': url_for('auth.login')
                 })
             
-            # Verificar se o usuário é premium (já não deveria chegar aqui se não for)
-            if not current_user.is_premium and not current_user.is_admin:
+            # Verificar se o usuário é administrador
+            if not current_user.is_admin:
                 return jsonify({
                     'success': False,
-                    'error': "This feature is exclusive for premium users.",
-                    'redirect': url_for('main.premium_subscription')
+                    'error': "This feature is exclusive for administrators.",
+                    'redirect': url_for('main.index')
                 })
             
             # Obter mensagem do usuário
