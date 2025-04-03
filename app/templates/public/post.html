@@ -584,7 +584,7 @@
                                     {% endif %}
                                     <div class="card-body">
                                         <h5 class="recent-post-title">{{ recent.title }}</h5>
-                                        <div class="recent-post-meta">
+                                        <div class="recent-post-meta mb-2">
                                             <span>
                                                 <i class="far fa-user"></i> {{ recent.author.username if recent.author else 'Ethan Heyes' }}
                                             </span>
@@ -595,7 +595,8 @@
                                                 <i class="far fa-clock"></i> {{ recent.get_reading_time() }} min read
                                             </span>
                                         </div>
-                                        <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary">Read post</a>
+                                        <p class="recent-post-summary my-2">{{ recent.summary|truncate(100) }}</p>
+                                        <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary mt-2">Read post</a>
                                     </div>
                                 </div>
                             </div>

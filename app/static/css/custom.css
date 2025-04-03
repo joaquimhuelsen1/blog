@@ -493,6 +493,24 @@ a:hover {
     line-height: 1.4;
 }
 
+.recent-post-summary {
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.recent-post-meta {
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 /* Footer */
 footer {
     background-color: #000000;

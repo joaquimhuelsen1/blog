@@ -42,6 +42,39 @@
         color: #ffc107;
         margin-right: 0.25rem;
     }
+    
+    /* Custom styles to replace blue with red */
+    .btn-outline-primary {
+        color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+    
+    .btn-outline-primary:hover, 
+    .btn-outline-primary:focus, 
+    .btn-outline-primary.active {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white;
+    }
+    
+    /* Estilo para o botão de sort by (vermelho) */
+    .sort-dropdown-btn {
+        background-color: var(--primary-color);
+        color: #fff;
+        border-color: var(--primary-color);
+    }
+    
+    /* Estilo para as opções do dropdown (preto) */
+    .dropdown-menu .dropdown-item {
+        color: #000;
+    }
+    
+    .dropdown-menu .dropdown-item:hover,
+    .dropdown-menu .dropdown-item:focus,
+    .dropdown-menu .dropdown-item.active {
+        background-color: rgba(198, 0, 0, 0.1);
+        color: var(--primary-color);
+    }
 </style>
 {% endblock %}
 
@@ -63,7 +96,7 @@
             </a>
         </div>
         <div class="dropdown">
-            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <button class="btn sort-dropdown-btn dropdown-toggle" type="button" id="sortDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                 Sort by: 
                 {% if active_sort == 'recent' %}Most Recent
                 {% elif active_sort == 'read_time_asc' %}Read Time (Shortest)
@@ -100,7 +133,7 @@
                             </div>
                             <p class="card-text">{{ post.summary }}</p>
                             <div class="mt-auto">
-                                <a href="{{ url_for('main.post', post_id=post.id) }}" class="btn btn-outline-primary btn-sm">Read more</a>
+                                <a href="{{ url_for('main.post', post_id=post.id) }}" class="btn btn-primary btn-sm">Read more</a>
                             </div>
                         </div>
                     </div>
