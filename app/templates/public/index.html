@@ -125,7 +125,7 @@
                 {% if current_user.is_authenticated and current_user.is_premium %}
                 <button class="btn btn-success w-100 text-white" disabled>YOU ARE ALREADY A PREMIUM USER</button>
                 {% else %}
-                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-warning w-100 text-white">Learn more</a>
+                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-warning w-100 text-white" onclick="gtag('event', 'clique_card_premium', {'event_category': 'Engajamento', 'event_label': 'Card Premium', 'value': 1});">Learn more</a>
                 {% endif %}
             </div>
         </div>
@@ -141,7 +141,7 @@
                     In my Telegram group, I share important updates, direct insights, and offer exclusive support for those who truly want to turn the tables in their reconquest.<br>
                     If you want my help up close, this is the place to be.
                 </p>
-                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="btn text-white w-100" style="background-color: #30A4E0; border-color: #30A4E0;">
+                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="btn text-white w-100" style="background-color: #30A4E0; border-color: #30A4E0;" onclick="gtag('event', 'clique_card_telegram', {'event_category': 'Engajamento', 'event_label': 'Card Telegram', 'value': 1});">
                     <i class="fab fa-telegram-plane me-1"></i> Join Group
                 </a>
             </div>
