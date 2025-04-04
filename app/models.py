@@ -85,6 +85,9 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     reading_time = db.Column(db.Integer, nullable=True)  # Tempo de leitura em minutos (editável)
+    status = db.Column(db.String(20), default='agendado')  # 'agendado' ou 'postar agora'
+    type_content = db.Column(db.String(20), nullable=True)  # 'winning back', 'stay connected', 'overcoming', 'case analysis'
+    notion_url = db.Column(db.String(255), nullable=True)  # URL do Notion relacionado ao post
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user_new.id'))
     comments = db.relationship('Comment', backref='post', lazy='dynamic')
 

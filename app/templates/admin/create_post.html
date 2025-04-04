@@ -18,6 +18,15 @@
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
+                        {{ form.notion_url.label(class="form-label") }}
+                        {{ form.notion_url(class="form-control") }}
+                        <small class="form-text text-muted">{{ form.notion_url.description }}</small>
+                        {% for error in form.notion_url.errors %}
+                            <span class="text-danger">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
                         {{ form.title.label(class="form-label") }}
                         {{ form.title(class="form-control") }}
                         {% for error in form.title.errors %}
@@ -69,6 +78,29 @@
                                 <input type="datetime-local" name="created_at" id="created_at" class="form-control">
                                 <small class="form-text text-muted">{{ form.created_at.description }}</small>
                                 {% for error in form.created_at.errors %}
+                                    <span class="text-danger">{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.status.label(class="form-label") }}
+                                {{ form.status(class="form-control") }}
+                                <small class="form-text text-muted">{{ form.status.description }}</small>
+                                {% for error in form.status.errors %}
+                                    <span class="text-danger">{{ error }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.type_content.label(class="form-label") }}
+                                {{ form.type_content(class="form-control") }}
+                                <small class="form-text text-muted">{{ form.type_content.description }}</small>
+                                {% for error in form.type_content.errors %}
                                     <span class="text-danger">{{ error }}</span>
                                 {% endfor %}
                             </div>

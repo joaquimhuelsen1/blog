@@ -311,6 +311,9 @@ def create_post():
                 'image_url': image_url or 'https://via.placeholder.com/1200x400',
                 'reading_time': form.reading_time.data,
                 'premium_only': form.premium_only.data,
+                'status': form.status.data,
+                'type_content': form.type_content.data,
+                'notion_url': form.notion_url.data,
                 'author_id': str(current_user.id),
                 'author_username': current_user.username
             }
@@ -472,6 +475,9 @@ def edit_post(post_id):
                 'image_url': image_url,
                 'reading_time': form.reading_time.data,
                 'premium_only': form.premium_only.data,
+                'status': form.status.data,
+                'type_content': form.type_content.data,
+                'notion_url': form.notion_url.data,
                 'created_at': form.created_at.data.isoformat() if form.created_at.data else None
             }
             
