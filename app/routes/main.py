@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, jsonify, session, current_app
 from flask_login import current_user, login_required
-from app.forms import CommentForm, ChatMessageForm
+# from app import db # REMOVIDO
+from app.forms import ChatMessageForm, CommentForm
 import os
 import requests
 import json
@@ -190,7 +191,45 @@ def post(post_id):
         else:
             post_obj.author = SimpleNamespace(username='Desconhecido')
 
-        # --- PASSO 2: Buscar Posts Recentes (Nova chamada ao Webhook) --- 
+        # --- PASSO 2: Buscar Comentários (Usando Webhook) --- 
+        comments_data = []
+        comment_webhook_url = os.environ.get('WEBHOOK_COMMENT_POST') # Usar o mesmo webhook
+        if comment_webhook_url:
+            try:
+                webhook_data_comments = {
+                    'event': 'get_comments', # Novo evento para buscar comentários
+                    'post_id': post_id_str
+                }
+                logger.info(f"Buscando comentários via webhook: {comment_webhook_url} - Payload: {webhook_data_comments}")
+                response_comments = requests.post(comment_webhook_url, json=webhook_data_comments, timeout=10)
+                response_comments.raise_for_status()
+                response_data_comments = response_comments.json()
+                
+                # Assume que o webhook retorna {success: true, comments: [...]} ou {success: false, message: "..."}
+                if isinstance(response_data_comments, dict) and response_data_comments.get('success'):
+                    raw_comments = response_data_comments.get('comments', [])
+                    logger.info(f"Recebidos {len(raw_comments)} comentários do webhook.")
+                    # Processar comentários (ex: formatar data)
+                    for comment in raw_comments:
+                         if 'created_at' in comment and isinstance(comment['created_at'], str):
+                             try:
+                                 comment['created_at'] = datetime.fromisoformat(comment['created_at'].replace('Z', '+00:00'))
+                             except ValueError:
+                                 logger.warning(f"Não foi possível converter created_at '{comment['created_at']}' do comentário")
+                         if 'author' not in comment or not isinstance(comment.get('author'), dict):
+                             comment['author'] = {'username': 'Unknown'} # Adiciona autor padrão
+                    comments_data = raw_comments
+                else:
+                    error_msg = response_data_comments.get('message', 'Unknown error fetching comments') if isinstance(response_data_comments, dict) else 'Invalid response format for comments'
+                    logger.error(f"Erro ao buscar comentários via webhook: {error_msg}")
+            except requests.RequestException as e_comm:
+                logger.error(f"Erro de rede ao buscar comentários: {str(e_comm)}")
+            except Exception as e_proc_comm:
+                 logger.error(f"Erro ao processar comentários do webhook: {str(e_proc_comm)}")
+        else:
+             logger.warning("WEBHOOK_COMMENT_POST não configurado, não foi possível buscar comentários.")
+
+        # --- PASSO 3: Buscar Posts Recentes (Nova chamada ao Webhook) --- 
         recent_posts_data = []
         try:
             webhook_data_recent = {
@@ -250,18 +289,15 @@ def post(post_id):
              logger.error(f"Erro ao processar posts recentes: {str(e_proc_recent)}")
         # ----------------------------------------------------------------
 
-        form = CommentForm()
+        # --- PASSO 4: Preparar Formulário de Comentário e Renderizar --- 
+        form = CommentForm() # Instanciar o formulário para passar ao template
         
-        # Comentários: Manter como está (vazio ou buscar de outra forma se necessário)
-        comments_data = [] 
-        logger.info("Busca de comentários do DB local desativada nesta função.")
-            
         return render_template('public/post.html', 
-                             post=post_obj, 
-                             recent_posts=recent_posts_data, # Vem da nova chamada ao webhook
-                             form=form, 
-                             comments=comments_data)
-                             
+                               post=post_obj, 
+                               recent_posts=recent_posts_data,
+                               form=form, # Passar o formulário
+                               comments=comments_data) # Passar os comentários obtidos
+
     except requests.RequestException as e:
         logger.error(f"Erro de requisição (principal ou recente) no post {post_id_str}: {str(e)}")
         # Diferenciar o erro talvez? Por enquanto, erro genérico.
@@ -272,38 +308,58 @@ def post(post_id):
         abort(500, description="An unexpected error occurred.")
 
 @main_bp.route('/post/<uuid:post_id>/comment', methods=['POST'])
+@login_required # Garantir que só usuários logados comentem
 def add_comment(post_id):
-    # ATENÇÃO: Esta rota ainda depende inteiramente do SQLAlchemy
-    # TODO: Refatorar para usar webhook para adicionar comentários se necessário
-    if not current_user.is_authenticated:
-        return jsonify({'success': False, 'message': 'You need to log in to comment.'})
-        
     form = CommentForm()
     
     if form.validate_on_submit():
-        # Exemplo Simplificado: Apenas loga a tentativa, sem salvar no DB
-        logger.info(f"Tentativa de comentário por {current_user.username} no post {post_id}: {form.content.data}")
-        flash('Comment submission via webhook is not implemented yet.', 'warning')
-        return redirect(url_for('main.post', post_id=post_id))
-        # try:
-        #     comment = Comment(
-        #         content=form.content.data,
-        #         author=current_user, # Busca do DB via Flask-Login
-        #         post_id=post_id, # Usa o post_id da URL
-        #         approved=current_user.is_admin
-        #     )
-        #     db.session.add(comment)
-        #     db.session.commit()
-        #     flash('Your comment has been submitted.', 'info')
-        # except Exception as db_error:
-        #     logger.error(f"Erro ao salvar comentário no DB: {db_error}")
-        #     flash('Could not submit comment due to a database error.', 'danger')
-        # return redirect(url_for('main.post', post_id=post_id))
+        webhook_url = os.environ.get('WEBHOOK_COMMENT_POST')
+        if not webhook_url:
+            logger.error("WEBHOOK_COMMENT_POST não configurado!")
+            return jsonify({'success': False, 'message': 'Server configuration error.'}), 500
+            
+        try:
+            payload = {
+                'event': 'add_comment',
+                'post_id': str(post_id), 
+                'user_id': str(current_user.id), # Envia ID do usuário
+                'username': current_user.username, # Envia username
+                'content': form.content.data,
+                'is_admin': current_user.is_admin # Informa se é admin para aprovação automática?
+            }
+            
+            logger.info(f"Enviando comentário para webhook: {webhook_url} - Payload: {payload}")
+            response = requests.post(webhook_url, json=payload, timeout=15)
+            response.raise_for_status() # Levanta erro para status >= 400
+            
+            response_data = response.json()
+            logger.info(f"Resposta do webhook de comentário: {response_data}")
+            
+            # Assume que o webhook retorna {success: true/false, message: "..."}
+            if isinstance(response_data, dict) and response_data.get('success'):
+                flash_message = response_data.get('message', 'Comment submitted successfully!')
+                if not current_user.is_admin:
+                     flash_message = "Your comment has been submitted for review."
+                return jsonify({'success': True, 'message': flash_message})
+            else:
+                error_message = response_data.get('message', 'Failed to submit comment.') if isinstance(response_data, dict) else 'Unknown error from webhook.'
+                logger.error(f"Erro retornado pelo webhook de comentário: {error_message}")
+                return jsonify({'success': False, 'message': error_message}), 400
+                
+        except requests.RequestException as req_err:
+            logger.error(f"Erro de rede ao enviar comentário para webhook: {req_err}")
+            return jsonify({'success': False, 'message': 'Network error contacting comment service.'}), 503
+        except Exception as e:
+            logger.exception(f"Erro inesperado ao adicionar comentário via webhook")
+            return jsonify({'success': False, 'message': 'An unexpected server error occurred.'}), 500
     else:
-        # Lidar com falha na validação do formulário (ex: retornar erros)
-        # (Esta parte pode precisar de ajuste dependendo de como o form é submetido)
-        flash('Invalid comment.', 'danger') 
-        return redirect(url_for('main.post', post_id=post_id))
+        # Falha na validação do formulário (CSRF, campo vazio, etc.)
+        errors = form.errors
+        logger.warning(f"Falha na validação do formulário de comentário: {errors}")
+        # Idealmente, extrair a mensagem de erro específica
+        first_error = next(iter(errors.values()))[0] if errors else "Invalid input."
+        return jsonify({'success': False, 'message': first_error}), 400
+# ---------------------------------------------------- 
 
 @main_bp.route('/posts')
 def all_posts():

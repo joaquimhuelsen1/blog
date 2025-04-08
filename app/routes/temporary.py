@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify
-from app import db
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+# from app import db # REMOVIDO
 from app.models import User
 from werkzeug.security import generate_password_hash
 import os
 import secrets
 import logging
+from flask_login import login_required, current_user
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -78,8 +79,8 @@ def create_admin():
         user.set_password(password)
         
         # Add to database
-        db.session.add(user)
-        db.session.commit()
+        # db.session.add(user)
+        # db.session.commit()
         
         logger.info(f"Admin user created successfully: {username} ({email})")
         
@@ -95,6 +96,6 @@ def create_admin():
         }), 201
         
     except Exception as e:
-        db.session.rollback()
+        # db.session.rollback()
         logger.error(f"Error creating admin user: {str(e)}")
         return jsonify({"error": f"Failed to create user: {str(e)}"}), 500 

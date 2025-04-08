@@ -505,7 +505,7 @@
                         <div class="card mb-4">
                             <div class="card-body">
                                 <form id="comment-form" method="POST" action="{{ url_for('main.add_comment', post_id=post.id) }}">
-                                    {{ form.hidden_tag() }}
+                                    {{ form.hidden_tag() if form.hidden_tag else '' }}
                                     <div class="mb-3">
                                         <div class="d-flex align-items-center mb-2">
                                             <i class="fas fa-user me-2"></i>
@@ -521,10 +521,11 @@
                                         {% endif %}
                                     </div>
                                     <div>
-                                        {{ form.submit(class="btn btn-primary", id="submit-comment") }}
-                                        <div id="comment-message" class="alert alert-success mt-2">
-                                            <!-- Message will be inserted by JavaScript -->
-                                        </div>
+                                        <button type="submit" class="btn btn-primary" id="submit-comment">
+                                            {{ form.submit.label }}
+                                            <span class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+                                        </button>
+                                        <div id="comment-message" class="mt-2" style="display: none;"></div>
                                     </div>
                                 </form>
                             </div>
@@ -643,15 +644,22 @@
     document.addEventListener('DOMContentLoaded', function() {
         const commentForm = document.getElementById('comment-form');
         const commentMessage = document.getElementById('comment-message');
+        const submitButton = document.getElementById('submit-comment');
+        const spinner = submitButton ? submitButton.querySelector('.spinner-border') : null;
         
         // Hide message initially
         if (commentMessage) {
             commentMessage.style.display = 'none';
         }
         
-        if (commentForm) {
+        if (commentForm && submitButton && spinner) {
             commentForm.addEventListener('submit', function(e) {
-                e.preventDefault();
+                e.preventDefault(); // Prevent default form submission
+                
+                // Disable button and show spinner
+                submitButton.disabled = true;
+                spinner.classList.remove('d-none');
+                commentMessage.style.display = 'none'; // Hide previous messages
                 
                 const formData = new FormData(commentForm);
                 
@@ -660,27 +668,38 @@
                     body: formData,
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
+                        // CSRF token might be needed depending on your setup, handled by hidden_tag usually
                     },
-                    credentials: 'same-origin'
+                    // credentials: 'same-origin' // Removed, may cause issues if backend origin differs
                 })
-                .then(response => response.json())
-                .then(data => {
-                    // Show success message
-                    commentMessage.textContent = data.message;
-                    commentMessage.className = 'alert alert-success mt-2';
-                    commentMessage.style.display = 'block';
+                .then(response => response.json().then(data => ({ status: response.status, body: data })))
+                .then(({ status, body }) => {
+                    commentMessage.textContent = body.message; // Use message from JSON response
                     
-                    // Clear the form if the comment was successfully sent
-                    if (data.success) {
-                        commentForm.reset();
-                        // Message will remain visible
+                    if (body.success) {
+                        commentMessage.className = 'alert alert-success mt-2';
+                        commentForm.reset(); // Clear form on success
+                        // Keep button disabled and spinner showing briefly? Or re-enable?
+                        // For now, re-enable immediately after success message shown
+                        submitButton.disabled = false;
+                        spinner.classList.add('d-none');
+                    } else {
+                        // Handle business logic errors (e.g., validation fail on backend)
+                        commentMessage.className = 'alert alert-danger mt-2';
+                        // Re-enable button on failure so user can retry
+                        submitButton.disabled = false;
+                        spinner.classList.add('d-none');
                     }
+                    commentMessage.style.display = 'block'; // Show message
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    commentMessage.textContent = 'An error occurred while submitting your comment.';
+                    commentMessage.textContent = 'An error occurred while submitting your comment. Please check your connection and try again.';
                     commentMessage.className = 'alert alert-danger mt-2';
                     commentMessage.style.display = 'block';
+                    // Re-enable button on network/fetch error
+                    submitButton.disabled = false;
+                    spinner.classList.add('d-none');
                 });
             });
         }

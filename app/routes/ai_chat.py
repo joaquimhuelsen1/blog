@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, jsonify, request, session, flash, current_app, redirect, url_for
 from flask_login import current_user, login_required
 from app.forms import ChatMessageForm
-from app import db
+# from app import db # REMOVIDO
 from app.models import User
 import random
 import time

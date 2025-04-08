@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_required, current_user
-from app import db
-from app.models import User, Post, Comment
+# from app import db # REMOVIDO
+# from app.models import User, Post, Comment # Remover Post e Comment
+from app.models import User # Manter apenas User
 from app.forms import PostForm, UserUpdateForm
 from app.utils import upload_image_to_supabase
 from functools import wraps

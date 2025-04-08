@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, render_template, session, g, redirect, url_for, flash
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 # Importar Flask-Migrate condicionalmente
 import importlib.util
@@ -8,7 +7,7 @@ from flask_wtf.csrf import CSRFProtect, CSRFError
 from config import Config
 from dotenv import load_dotenv
 # Definir a variável SUPABASE_DIRECT_URL como global no módulo
-SUPABASE_DIRECT_URL = None
+# SUPABASE_DIRECT_URL = None
 from datetime import datetime, timedelta
 import os
 import traceback
@@ -19,6 +18,7 @@ import socket
 from flask_migrate import Migrate
 from flask_mail import Mail
 from flask_session import Session
+from app.extensions import login_manager, mail
 
 # Configurar logging
 logging.basicConfig(
@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger('blog_app_init')
 
 # Importar extensões
-from app.extensions import db, login_manager, mail
+# from app.extensions import db, login_manager, mail
 
 # Verificar se Flask-Migrate está disponível
 flask_migrate_available = importlib.util.find_spec('flask_migrate') is not None
@@ -59,88 +59,6 @@ login_manager.login_message_category = 'info'
 # Carregar variáveis de ambiente do .env
 load_dotenv(override=True)
 
-def diagnose_connection(host, port=5432):
-    """Função para diagnosticar problemas de conectividade com banco de dados"""
-    results = {
-        "host": host,
-        "port": port,
-        "ip_resolved": None,
-        "can_connect": False,
-        "errors": []
-    }
-    
-    # Tentar resolver o hostname
-    try:
-        ip_address = socket.gethostbyname(host)
-        results["ip_resolved"] = ip_address
-        logger.info(f"✅ Hostname resolvido: {host} -> {ip_address}")
-    except socket.gaierror as e:
-        error_msg = f"❌ Não foi possível resolver o hostname: {host} - {str(e)}"
-        results["errors"].append(error_msg)
-        logger.error(error_msg)
-        # Tentar outras alternativas
-        alternate_hosts = [
-            "db.supabase.co",               # Host global do Supabase
-            f"db.{host.split('.',1)[1]}"    # Tentar com prefixo db
-        ]
-        for alt_host in alternate_hosts:
-            try:
-                logger.info(f"Tentando alternativa: {alt_host}")
-                alt_ip = socket.gethostbyname(alt_host)
-                results["alternate_host"] = alt_host
-                results["alternate_ip"] = alt_ip
-                logger.info(f"✅ Alternativa resolvida: {alt_host} -> {alt_ip}")
-                break
-            except socket.gaierror:
-                logger.warning(f"❌ Alternativa não resolvida: {alt_host}")
-    
-    # Se conseguiu resolver o IP, tentar conectar
-    if results["ip_resolved"]:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(2)
-            s.connect((results["ip_resolved"], port))
-            s.close()
-            results["can_connect"] = True
-            logger.info(f"✅ Conexão TCP estabelecida com {host}:{port}")
-        except Exception as e:
-            error_msg = f"❌ Não foi possível conectar a {host}:{port} - {str(e)}"
-            results["errors"].append(error_msg)
-            logger.error(error_msg)
-    
-    # Checar alternativa se houver
-    if not results["can_connect"] and "alternate_ip" in results:
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(2)
-            s.connect((results["alternate_ip"], port))
-            s.close()
-            results["alternate_can_connect"] = True
-            logger.info(f"✅ Conexão TCP estabelecida com alternativa {results['alternate_host']}:{port}")
-        except Exception as e:
-            logger.error(f"❌ Não foi possível conectar à alternativa {results['alternate_host']}:{port} - {str(e)}")
-    
-    return results
-
-def setup_db_event_listeners(app_db):
-    """Configura event listeners para o SQLAlchemy dentro do contexto"""
-    @app_db.event.listens_for(app_db.engine, 'connect')
-    def receive_connect(dbapi_connection, connection_record):
-        logger.info("==== CONEXÃO COM BANCO DE DADOS ESTABELECIDA ====")
-    
-    @app_db.event.listens_for(app_db.engine, 'checkout')
-    def receive_checkout(dbapi_connection, connection_record, connection_proxy):
-        logger.info("Conexão retirada do pool")
-    
-    @app_db.event.listens_for(app_db.engine, 'before_cursor_execute')
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        # Logar apenas as consultas relacionadas a posts para não sobrecarregar o log
-        if 'post' in statement.lower():
-            logger.info(f"SQL: {statement}")
-            logger.info(f"Parâmetros: {parameters}")
-    
-    logger.info("Event listeners registrados para SQLAlchemy")
-
 def create_app():
     """Create and configure the Flask application."""
     logger.info("==== INICIALIZANDO APLICAÇÃO FLASK ====")
@@ -165,47 +83,6 @@ def create_app():
     from app.utils import markdown_to_html
     app.jinja_env.filters['markdown'] = markdown_to_html
     logger.info("Filtro markdown registrado")
-    
-    # Verificar e corrigir URL para conectividade com Supabase
-    if 'SQLALCHEMY_DATABASE_URI' in app.config and app.config['SQLALCHEMY_DATABASE_URI']:
-        db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-        
-        # Se a URL contém um host do Supabase mas não o host correto do pooler
-        if '.supabase.co' in db_uri and 'pooler.supabase.com' not in db_uri:
-            # Extrair user, password, host e o resto da URL
-            match = re.match(r'postgresql://([^:]+):([^@]+)@([^\/]+)/([^?]+)(.*)', db_uri)
-            if match:
-                user, password, host, dbname, params = match.groups()
-                
-                # Transformar o formato do nome de usuário para incluir o ID do projeto
-                # Se o host contém o ID do projeto (ex: db.mqyasfpbtcdrxccuhchv.supabase.co)
-                host_match = re.search(r'\.([a-z0-9]+)\.supabase\.co', host)
-                if host_match and user == 'postgres':
-                    project_id = host_match.group(1)
-                    pooler_user = f"postgres.{project_id}"
-                    logger.info(f"Usuário modificado para formato pooler: {user} -> {pooler_user}")
-                    user = pooler_user
-                
-                # Reconstruir a URL com o host correto do pooler
-                app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{user}:{password}@aws-0-us-west-1.pooler.supabase.com:6543/{dbname}?sslmode=prefer"
-                logger.info("URL do Supabase corrigida em app/__init__.py para usar o host correto do pooler")
-                
-            # Log da URL final
-            logger.info(f"URL final do banco de dados: {app.config['SQLALCHEMY_DATABASE_URI'].split('@')[0]}@****")
-            
-            # Diagnosticar conectividade com o host correto
-            host = "aws-0-us-west-1.pooler.supabase.com"
-            port = 6543
-            logger.info(f"Diagnosticando conectividade com host do pooler: {host}:{port}")
-            diag_results = diagnose_connection(host, port)
-            if diag_results["ip_resolved"]:
-                logger.info(f"✅ Host do pooler resolvido: {host} -> {diag_results['ip_resolved']}")
-                if diag_results["can_connect"]:
-                    logger.info(f"✅ Conexão TCP possível com o host do pooler na porta {port}")
-                else:
-                    logger.warning(f"⚠️ Host resolvido mas conexão TCP não é possível na porta {port} - verifique firewall")
-            else:
-                logger.error(f"❌ Não foi possível resolver o host do pooler: {host}")
     
     # Log das configurações importantes (sem revelar senhas)
     safe_config = {k: v for k, v in app.config.items() 
@@ -281,7 +158,7 @@ def create_app():
     logger.info("Proteção CSRF: DESATIVADA TEMPORARIAMENTE")
     
     # Inicializar extensões
-    db.init_app(app)
+    # db.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app) # Inicializar Mail
     
@@ -300,89 +177,6 @@ def create_app():
             except Exception as table_error:
                 logger.error(f"Erro ao verificar/criar tabela de sessão: {table_error}")
                 
-    # Inicializar Flask-Migrate se disponível
-    if migrate:
-        migrate.init_app(app, db)
-        logger.info("Flask-Migrate inicializado com o app e db")
-    
-    # Configurar listeners dentro do contexto da aplicação
-    with app.app_context():
-        setup_db_event_listeners(db)
-    
-    # Inicializar CSRF protection antes de qualquer blueprint
-    # csrf.init_app(app)
-    # logger.info("CSRF protection inicializado")
-    
-    # Tentar conectar ao banco de dados
-    try:
-        # Se estamos usando PostgreSQL, tentar conectar
-        if 'postgresql://' in app.config['SQLALCHEMY_DATABASE_URI']:
-            logger.info("Tentando conectar ao PostgreSQL...")
-            db_url = app.config['SQLALCHEMY_DATABASE_URI']
-            masked_url = db_url
-            if '@' in db_url:
-                # Mascarar senha na URL para exibição
-                prefix, suffix = db_url.split('@', 1)
-                if ':' in prefix and '/' in prefix:
-                    user_part, pass_part = prefix.rsplit(':', 1)
-                    masked_url = f"{user_part}:***@{suffix}"
-            logger.info(f"URL PostgreSQL: {masked_url}")
-            
-            try:
-                with app.app_context():
-                    connection = db.engine.connect()
-                    # Verificar a versão do PostgreSQL - usar text() para executar SQL
-                    version = connection.execute(text("SELECT version();")).scalar()
-                    logger.info(f"✅ Conexão PostgreSQL estabelecida: {version}")
-                    connection.close()
-            except Exception as pooler_error:
-                # Se falhar com o pooler, tentar conexão direta
-                if SUPABASE_DIRECT_URL:
-                    logger.warning(f"❌ Falha ao conectar via pooler: {str(pooler_error)}")
-                    logger.info("Tentando conexão direta com o banco de dados Supabase...")
-                    
-                    # Atualizar a configuração para usar conexão direta
-                    app.config['SQLALCHEMY_DATABASE_URI'] = SUPABASE_DIRECT_URL
-                    masked_direct = SUPABASE_DIRECT_URL.split('@')[0] + '@***'
-                    logger.info(f"URL direta: {masked_direct}")
-                    
-                    # Tentar novamente com conexão direta
-                    with app.app_context():
-                        try:
-                            # Recria engine com nova configuração
-                            db.get_engine(app).dispose()
-                            connection = db.engine.connect()
-                            # Verificar a versão do PostgreSQL
-                            version = connection.execute(text("SELECT version();")).scalar()
-                            logger.info(f"✅ Conexão direta PostgreSQL estabelecida: {version}")
-                            connection.close()
-                        except Exception as direct_error:
-                            logger.error(f"❌ Também falhou a conexão direta: {str(direct_error)}")
-                            raise direct_error
-                else:
-                    # Se não há URL direta disponível
-                    raise pooler_error
-    except Exception as e:
-        logger.error(f"❌ ERRO DE CONEXÃO COM BANCO DE DADOS: {str(e)}")
-        logger.exception("Detalhes do erro de conexão:")
-        logger.warning("Alterando para SQLite como fallback devido a erro de conexão...")
-        # Alterar para SQLite como fallback
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.instance_path, 'fallback.db')
-        logger.info(f"Novo URI SQLite: {app.config['SQLALCHEMY_DATABASE_URI']}")
-        # Reinicializar a conexão mas manter a instância db
-        with app.app_context():
-            db.create_all()  # Criar as tabelas no SQLite
-            logger.info("Tabelas criadas no SQLite de fallback")
-    
-    if migrate is not None:
-        migrate.init_app(app, db)
-        logger.info("Flask-Migrate inicializado")
-    login_manager.init_app(app)
-    logger.info("Flask-Login inicializado")
-    if sess is not None:
-        sess.init_app(app)
-        logger.info("Flask-Session inicializado")
-    
     # Configurar login manager
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please log in to access this page.'
@@ -445,77 +239,53 @@ def create_app():
             """
             return html, 500
     
-    # Registrar blueprints - Verificar se o módulo ou o pacote existe
-    try:
-        # --- PRIORIZAR IMPORTAÇÃO DA PASTA --- 
-        logger.info("Tentando importar blueprints da pasta app/routes/")
-        from app.routes.main import main_bp
-        from app.routes.auth import auth_bp
-        from app.routes.admin import admin_bp
-        from app.routes.user import user_bp
-        from app.routes.temporary import temp_bp
-        from app.routes.ai_chat import ai_chat_bp
-        
-        # Registrar todos os blueprints
-        app.register_blueprint(main_bp)
-        app.register_blueprint(auth_bp, url_prefix='/auth')
-        app.register_blueprint(admin_bp, url_prefix='/admin')
-        app.register_blueprint(user_bp, url_prefix='/user')
-        app.register_blueprint(temp_bp, url_prefix='/temp')
-        app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
-        logger.info("✅ Blueprints registrados da pasta app/routes/")
-
-    except ImportError as e_folder:
-        logger.warning(f"Falha ao importar da pasta app/routes/: {str(e_folder)}")
-        logger.warning("Tentando importar blueprints do arquivo app/routes.py (legado?)")
-        # Caso falhe, tentar importar do arquivo app/routes.py (estrutura antiga?)
-        try:
-            # Primeiro tentar importar do arquivo app/routes.py
-            from app.routes import main_bp, auth_bp, admin_bp, user_bp, temp_bp, ai_chat_bp
-            
-            # Register blueprints
-            app.register_blueprint(main_bp)
-            app.register_blueprint(auth_bp, url_prefix='/auth')
-            app.register_blueprint(admin_bp, url_prefix='/admin')
-            app.register_blueprint(user_bp, url_prefix='/user')
-            app.register_blueprint(temp_bp, url_prefix='/temp')
-            app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
-            logger.info("✅ Blueprints registrados do arquivo app/routes.py")
-        except ImportError as e_file:
-            logger.error(f"❌ ERRO FATAL: Não foi possível importar os blueprints nem da pasta nem do arquivo: {str(e_file)}")
+    # Registrar blueprints individualmente com imports diretos
+    registered_count = 0
     
-    with app.app_context():
-        # Importações que dependem do contexto da aplicação
-        # Mover importação de modelos para dentro do contexto se possível ou necessário
-        from app.models import User, Post
-        
-        # Tentar verificar o banco de dados
-        try:
-            # Verificar se as tabelas já existem
-            inspector = db.inspect(db.engine)
-            tables = inspector.get_table_names()
-            logger.info(f"Tabelas existentes: {tables}")
-            
-            # Verificar a tabela de posts
-            if 'post' in tables:
-                post_count = Post.query.count()
-                logger.info(f"Tabela 'post' tem {post_count} registros")
-                
-                # Verificar alguns posts
-                if post_count > 0:
-                    posts = Post.query.limit(3).all()
-                    post_ids = [p.id for p in posts]
-                    logger.info(f"Primeiros IDs de posts: {post_ids}")
-        except Exception as db_check_error:
-            logger.error(f"❌ Erro ao verificar tabelas: {str(db_check_error)}")
-        
-        # Criar tabelas do banco de dados se não existirem
-        try:
-            db.create_all()
-            logger.info("✅ Tabelas do banco de dados criadas com sucesso")
-        except Exception as e:
-            logger.error(f"❌ Erro ao criar tabelas do banco de dados: {str(e)}")
-            logger.exception("Detalhes do erro ao criar tabelas:")
+    # Registrar main_bp
+    try:
+        from app.routes.main import main_bp
+        app.register_blueprint(main_bp)
+        logger.info(f"✅ Blueprint 'main_bp' registrado com sucesso.")
+        registered_count += 1
+    except Exception as e:
+        logger.error(f"❌ Falha ao registrar blueprint 'main_bp': {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+
+    # Registrar auth_bp
+    try:
+        from app.routes.auth import auth_bp
+        app.register_blueprint(auth_bp, url_prefix='/auth')
+        logger.info(f"✅ Blueprint 'auth_bp' registrado com sucesso.")
+        registered_count += 1
+    except Exception as e:
+        logger.error(f"❌ Falha ao registrar blueprint 'auth_bp': {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+
+    # Registrar admin_bp
+    try:
+        from app.routes.admin import admin_bp
+        app.register_blueprint(admin_bp, url_prefix='/admin')
+        logger.info(f"✅ Blueprint 'admin_bp' registrado com sucesso.")
+        registered_count += 1
+    except Exception as e:
+        logger.error(f"❌ Falha ao registrar blueprint 'admin_bp': {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+
+    # Registrar ai_chat_bp
+    try:
+        from app.routes.ai_chat import ai_chat_bp
+        app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
+        logger.info(f"✅ Blueprint 'ai_chat_bp' registrado com sucesso.")
+        registered_count += 1
+    except Exception as e:
+        logger.error(f"❌ Falha ao registrar blueprint 'ai_chat_bp': {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+
+    if registered_count == 0:
+         logger.critical("❌ NENHUM BLUEPRINT FOI REGISTRADO! Verifique os erros acima.")
+    else:
+         logger.info(f"Total de {registered_count} blueprints registrados.")
     
     # Handler específico para erros de CSRF
     @app.errorhandler(CSRFError)
@@ -569,4 +339,4 @@ def create_app():
 from app import models
 
 # Tornar a função create_app disponível para importação diretamente de app
-__all__ = ['create_app', 'db'] 
+__all__ = ['create_app'] 

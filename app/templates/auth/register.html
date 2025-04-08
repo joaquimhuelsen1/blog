@@ -86,4 +86,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formAction = "{{ url_for('auth.register') }}";
+    const registrationForm = document.querySelector(`form[action="${formAction}"]`);
+    if (registrationForm) {
+        registrationForm.addEventListener('submit', function() {
+            const submitButton = registrationForm.querySelector('input[type="submit"], button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                // Optional: Change button text to indicate loading
+                if (submitButton.tagName === 'INPUT') {
+                    submitButton.value = 'Sending...';
+                } else {
+                    submitButton.textContent = 'Sending...';
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
 {% endblock %} 

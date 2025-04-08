@@ -1,9 +1,8 @@
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from app import db, login_manager
+from app import login_manager
 import uuid
-from sqlalchemy.dialects.postgresql import UUID
 from flask import session
 
 class User(UserMixin):
@@ -56,7 +55,6 @@ class User(UserMixin):
             else:
                 self.ai_credits = 1  # 1 crédito para usuários padrão
             print(f"[DEBUG] Créditos atualizados para {self.username}: {credits_antes} -> {self.ai_credits}")
-            db.session.commit()
             return True
         
         print(f"[DEBUG] Créditos não atualizados para {self.username}, mantendo {self.ai_credits}")
@@ -67,68 +65,11 @@ class User(UserMixin):
         print(f"[DEBUG] Tentando usar crédito para {self.username}: disponível={self.ai_credits}")
         if self.ai_credits > 0:
             self.ai_credits -= 1
-            db.session.commit()
+            # A atualização agora deve ser feita via webhook/n8n
             print(f"[DEBUG] Crédito consumido para {self.username}: restantes={self.ai_credits}")
             return True
         print(f"[DEBUG] Sem créditos disponíveis para {self.username}")
         return False  # Sem créditos disponíveis
-
-class Post(db.Model):
-    __tablename__ = 'post_new'
-    
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = db.Column(db.String(100))
-    content = db.Column(db.Text)
-    summary = db.Column(db.String(200))
-    image_url = db.Column(db.String(255), default='https://via.placeholder.com/1200x400')
-    premium_only = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, index=True, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
-    reading_time = db.Column(db.Integer, nullable=True)  # Tempo de leitura em minutos (editável)
-    status = db.Column(db.String(20), default='agendado')  # 'agendado' ou 'postar agora'
-    type_content = db.Column(db.String(20), nullable=True)  # 'winning back', 'stay connected', 'overcoming', 'case analysis'
-    notion_url = db.Column(db.String(255), nullable=True)  # URL do Notion relacionado ao post
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user_new.id'))
-    comments = db.relationship('Comment', backref='post', lazy='dynamic')
-
-    def __repr__(self):
-        return f'<Post {self.title}>'
-        
-    def get_reading_time(self):
-        """
-        Calculate estimated reading time based on content length.
-        Average reading speed: 200-250 words per minute.
-        Returns reading time in minutes.
-        If reading_time is manually set, returns that value instead.
-        """
-        # Se o tempo de leitura foi definido manualmente, retorne esse valor
-        if self.reading_time is not None:
-            return self.reading_time
-            
-        # Strip HTML tags if present (simplified approach)
-        import re
-        text = re.sub(r'<.*?>', '', self.content)
-        
-        # Count words
-        word_count = len(text.split())
-        
-        # Calculate reading time (using 225 words per minute as average)
-        reading_time_minutes = max(1, round(word_count / 225))
-        
-        return reading_time_minutes
-
-class Comment(db.Model):
-    __tablename__ = 'comment_new'
-    
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    approved = db.Column(db.Boolean, default=False)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('user_new.id'), nullable=False)
-    post_id = db.Column(UUID(as_uuid=True), db.ForeignKey('post_new.id'), nullable=False)
-
-    def __repr__(self):
-        return f'<Comment {self.id} by {self.author.username}>'
 
 @login_manager.user_loader
 def load_user(id):
