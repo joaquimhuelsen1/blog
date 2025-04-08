@@ -34,8 +34,8 @@
 
                     {% if show_otp_form %}
                     <div class="otp-section">
-                        <p class="mb-3 text-info">Enviamos um código de 6 dígitos para o seu e-mail: <strong>{{ otp_email }}</strong></p>
-                        <p>Por favor, insira o código abaixo para completar seu registro.</p>
+                        <p class="mb-3 text-info">We sent a 6-digit code to your email: <strong>{{ otp_email }}</strong></p>
+                        <p>Please enter the code below to complete your registration.</p>
                         
                         <form method="POST" action="{{ url_for('auth.register') }}">
                             <input type="hidden" name="action" value="verify_otp">
@@ -48,12 +48,12 @@
                                 {% endfor %}
                             </div>
                             
-                            <button type="submit" class="btn btn-primary w-100">Verificar Código</button>
+                            <button type="submit" class="btn btn-primary w-100">Verify Code</button>
                         </form>
                         
                         <hr>
                         <p class="text-center text-muted small">
-                            Não recebeu o código? <a href="{{ url_for('auth.resend_otp') }}">Reenviar código</a>
+                            Didn't receive the code? <a href="{{ url_for('auth.resend_otp') }}">Resend code</a>
                         </p>
                     </div>
                     {% endif %}

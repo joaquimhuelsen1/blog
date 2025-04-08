@@ -16,7 +16,7 @@ class LoginForm(FlaskForm):
 
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
-    submit = SubmitField('Enviar Código de Verificação')
+    submit = SubmitField('Send Verification Code')
 
 class PostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=100)])
@@ -69,8 +69,8 @@ class CommentForm(FlaskForm):
     submit = SubmitField('Submit Comment')
 
 class ChatMessageForm(FlaskForm):
-    message = TextAreaField('Sua Mensagem', validators=[DataRequired(), Length(min=2, max=1000)])
-    submit = SubmitField('Enviar')
+    message = TextAreaField('Your Message', validators=[DataRequired(), Length(min=2, max=1000)])
+    submit = SubmitField('Send')
 
 class PasswordChangeForm(FlaskForm):
     current_password = PasswordField('Current Password', validators=[DataRequired()])
@@ -80,10 +80,10 @@ class PasswordChangeForm(FlaskForm):
 
 class UserProfileForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
-    password = PasswordField('Nova senha', validators=[Optional(), Length(min=6)])
-    confirm_password = PasswordField('Confirmar nova senha', validators=[Optional(), EqualTo('password', message='As senhas devem ser iguais')])
-    age = IntegerField('Idade', validators=[Optional(), NumberRange(min=18, max=120)], description="Opcional. Você pode deixar este campo em branco.")
-    submit = SubmitField('Atualizar perfil')
+    password = PasswordField('New Password', validators=[Optional(), Length(min=6)])
+    confirm_password = PasswordField('Confirm New Password', validators=[Optional(), EqualTo('password', message='Passwords must match')])
+    age = IntegerField('Age', validators=[Optional(), NumberRange(min=18, max=120)], description="Optional. You can leave this field blank.")
+    submit = SubmitField('Update Profile')
 
 class VerifyOtpForm(FlaskForm):
     otp = StringField('Code 6 digits', validators=[
