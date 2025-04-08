@@ -377,30 +377,70 @@ def verify_registration_otp():
             response_data = response.json()
             logger.info(f"Resposta do WEBHOOK_AUTHENTICATE_OTP: {response_data}")
 
-            if isinstance(response_data, dict) and response_data.get('status') == 'success' and 'user' in response_data and 'session' in response_data:
-                user_data = response_data['user']
-                session_data = response_data['session']
-                
-                # Logar usuário no Flask (mesma lógica de antes)
+            # --- CORRECTED RESPONSE HANDLING ---
+            # Check if response is a dictionary containing the necessary keys
+            if isinstance(response_data, dict) and 'id' in response_data and 'email' in response_data and 'access_token' in response_data:
+                user_info = response_data # Use the dictionary directly
+
+                # Extract and convert data, providing defaults
+                user_id = user_info.get('id') # Use the ID from your user_new table
+                auth_id = user_info.get('auth-id') # Supabase Auth ID
+                user_email = user_info.get('email', email) # Fallback to original email
+                user_username = user_info.get('username', username) # Fallback to original username
+                # Convert string 'true'/'false' to boolean
+                is_admin_str = str(user_info.get('is_admin', 'false')).lower()
+                is_premium_str = str(user_info.get('is_premium', 'false')).lower()
+                user_is_admin = is_admin_str == 'true'
+                user_is_premium = is_premium_str == 'true'
+                # Convert string number to int, handle potential None or non-digit string
+                ai_credits_str = user_info.get('ai_credits', '0')
+                try:
+                    user_ai_credits = int(ai_credits_str) if ai_credits_str is not None and ai_credits_str.isdigit() else 0
+                except (ValueError, TypeError):
+                     user_ai_credits = 0 # Default if conversion fails
+                # Age can be null
+                user_age = user_info.get('age')
+                access_token = user_info.get('access_token')
+                refresh_token = user_info.get('refresh_token')
+
+                # Log extracted data for debugging
+                logger.info(f"Extracted user info: id={user_id}, auth_id={auth_id}, email={user_email}, username={user_username}, is_admin={user_is_admin}, is_premium={user_is_premium}, age={user_age}, ai_credits={user_ai_credits}")
+
+                # Ensure essential data is present
+                if not user_id or not user_email or not user_username or not access_token:
+                     logger.error(f"Dados essenciais ausentes na resposta do webhook para {email}: {user_info}")
+                     flash('Falha ao processar resposta do servidor. Tente novamente.', 'danger')
+                     return render_template('auth/verify_registration_otp.html', title='Completar Registro', form=form, email=email)
+
+                # Create Flask User object
                 flask_user = User(
-                    id=user_data.get('id'),
-                    email=user_data.get('email', email),
-                    username=user_data.get('username', username),
-                    is_admin=user_data.get('is_admin', False),
-                    is_premium=user_data.get('is_premium', False),
-                    age=user_data.get('age'),
-                    ai_credits=user_data.get('ai_credits', 0)
+                    id=user_id, # Use the ID from your user_new table
+                    email=user_email,
+                    username=user_username,
+                    is_admin=user_is_admin,
+                    is_premium=user_is_premium,
+                    age=user_age,
+                    ai_credits=user_ai_credits
                 )
-                login_user(flask_user)
-                
-                # Armazenar dados na sessão Flask
-                session['user_data'] = user_data
-                session['supabase_access_token'] = session_data.get('access_token')
-                session['supabase_refresh_token'] = session_data.get('refresh_token')
-                session['supabase_user_id'] = user_data.get('id')
+                login_user(flask_user) # Log the user in
+
+                # Store necessary data in Flask session
+                session['user_data'] = {
+                     'id': str(flask_user.id), # Ensure ID is string for session/load_user
+                     'username': flask_user.username,
+                     'email': flask_user.email,
+                     'is_admin': flask_user.is_admin,
+                     'is_premium': flask_user.is_premium,
+                     'age': flask_user.age,
+                     'ai_credits': flask_user.ai_credits,
+                     'auth_id': auth_id # Store Supabase Auth ID if needed
+                }
+                session['supabase_access_token'] = access_token
+                session['supabase_refresh_token'] = refresh_token
                 session.modified = True
-                session.pop('otp_email_for_registration', None)
-                
+                session.pop('otp_email_for_registration', None) # Clean up OTP email
+
+                logger.info(f"Registro completo e login bem-sucedido para {flask_user.email}")
                 flash('Registration complete and successfully logged in!', 'success')
 
                 # --- REDIRECT LOGIC ---
@@ -414,10 +454,16 @@ def verify_registration_otp():
                 # ----------------------
 
             else:
-                # Erro retornado pelo webhook (OTP inválido, username existe, etc)
-                error_message = response_data.get('message', 'Não foi possível completar o registro.') if isinstance(response_data, dict) else 'Erro desconhecido.'
-                logger.warning(f"Falha na verificação/registro via webhook para {email}: {error_message}")
+                # Erro retornado pelo webhook (OTP inválido, username existe, etc) or invalid format
+                error_message = "Não foi possível completar o registro."
+                # Try to get a specific message if the response was a dict
+                if isinstance(response_data, dict):
+                    error_message = response_data.get('message', error_message)
+                # No need to check for list anymore based on logs
+
+                logger.warning(f"Falha na verificação/registro via webhook para {email}: {error_message} (Raw Response: {response_data})")
                 flash(error_message, 'danger')
+                # Render the form again
 
         except requests.exceptions.RequestException as req_err:
             logger.error(f"Erro de rede ao chamar WEBHOOK_AUTHENTICATE_OTP para {email}: {req_err}")
