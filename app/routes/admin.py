@@ -385,130 +385,40 @@ def edit_post(post_id):
         response.raise_for_status()
         
         # Processar resposta
-        response_json = response.json()
-        print(f"Resposta do webhook: {response_json}")
-        
-        # Extrair post do formato correto (Revisado)
-        post_data = None
-        if isinstance(response_json, dict):
-            # Prioridade 1: Buscar a chave 'post' diretamente no dicionário
-            if 'post' in response_json and isinstance(response_json['post'], dict):
-                post_data = response_json['post']
-                print("Dados extraídos da chave 'post' principal.")
-            # Prioridade 2: Verificar se o próprio dicionário é o post (fallback)
-            elif 'id' in response_json:
-                post_data = response_json
-                print("Dados extraídos diretamente do dicionário principal (fallback).")
-                
-        # Prioridade 3: Verificar se é uma lista (formato antigo ou inesperado)
-        elif isinstance(response_json, list) and len(response_json) > 0:
-            first_item = response_json[0]
-            if isinstance(first_item, dict):
-                if 'post' in first_item and isinstance(first_item['post'], dict):
-                    post_data = first_item['post']
-                    print("Dados extraídos da chave 'post' dentro do primeiro item da lista.")
-                elif 'id' in first_item: 
-                    post_data = first_item
-                    print("Dados extraídos diretamente do primeiro item da lista (fallback).")
-             
+        response_data = response.json()
+        logger.info(f"Resposta do webhook: {response_data}")
+        post_data = response_data.get('post')
+
         if not post_data:
-            flash('Post não encontrado ou formato de resposta inválido.', 'danger')
+            flash('Post not found.', 'danger')
             return redirect(url_for('admin.all_posts'))
             
-        print(f"Dados do post processados: {post_data}")
+        # Corrigir o processamento da data para formato datetime
+        if 'created_at' in post_data and post_data['created_at']:
+             try:
+                 # Tentar converter de ISO 8601 (com ou sem Z)
+                 post_data['created_at'] = parser.isoparse(post_data['created_at'])
+             except (ValueError, TypeError):
+                 logger.warning(f"Não foi possível converter created_at '{post_data['created_at']}' para datetime. Deixando como None.")
+                 post_data['created_at'] = None # Ou definir um padrão, ou remover
         
-        # Converter created_at para datetime antes de criar o objeto Post
-        created_at_str = post_data.get('created_at')
-        created_at_dt = None
-        if created_at_str:
-            try:
-                # Usar dateutil.parser para lidar com o formato ISO 8601 com 'Z'
-                created_at_dt = parser.isoparse(created_at_str)
-                print(f"Data de criação convertida para datetime: {created_at_dt}")
-            except ValueError as date_err:
-                logger.error(f"Erro ao converter data de criação '{created_at_str}': {date_err}")
-                # Pode definir um valor padrão ou deixar None se a conversão falhar
-                created_at_dt = None 
-
-        # Criar objeto Post temporário usando os dados extraídos corretamente
-        post = Post(
-            id=post_data.get('id'),
-            title=post_data.get('title'),
-            content=post_data.get('content'),
-            summary=post_data.get('summary'),
-            image_url=post_data.get('image_url'),
-            premium_only=post_data.get('premium_only', False),
-            created_at=created_at_dt, # Usar o objeto datetime convertido
-            reading_time=post_data.get('reading_time')
-        )
-        
-        # Verifica se o autor está presente nos dados
-        author_data = post_data.get('author')
-        if isinstance(author_data, dict):
-            post.author = User(id=author_data.get('id'), username=author_data.get('username'))
-        else:
-            # Define um autor padrão se não vier nos dados
-            post.author = User(username='Desconhecido')
-            
-        form = PostForm(obj=post)
-        
-        if form.validate_on_submit():
-            print("\n=== ATUALIZANDO POST ===")
-            # Processar upload de imagem se houver
-            image_url = form.image_url.data or post.image_url
-            
-            if form.image.data:
-                try:
-                    image_url = upload_image_to_supabase(form.image.data)
-                except Exception as e:
-                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
-                    return render_template('admin/edit_post.html', form=form, post=post)
-            
-            # Preparar dados para atualização
-            update_data = {
-                'event': 'update_post',
-                'post_id': str(post_id),
-                'user_id': str(current_user.id),
-                'table': 'post_new',
-                'title': form.title.data,
-                'content': form.content.data,
-                'summary': form.summary.data,
-                'image_url': image_url,
-                'reading_time': form.reading_time.data,
-                'premium_only': form.premium_only.data,
-                'status': form.status.data,
-                'type_content': form.type_content.data,
-                'notion_url': form.notion_url.data,
-                'created_at': form.created_at.data.isoformat() if form.created_at.data else None
-            }
-            
-            print(f"Dados de atualização: {update_data}")
-            
-            # Enviar atualização para o webhook
-            update_response = requests.post(webhook_url, json=update_data, timeout=10)
-            update_response.raise_for_status()
-            
-            response_data = update_response.json()
-            print(f"Resposta da atualização: {response_data}")
-            
-            if response_data.get('status') == 'success' or response_data.get('response') == 'success':
-                flash('Post atualizado com sucesso!', 'success')
-                # Limpar a sessão para forçar recarregamento dos posts
-                session.pop('admin_posts', None)
-                return redirect(url_for('admin.all_posts'))
-            else:
-                flash('Erro ao atualizar post. Por favor, tente novamente.', 'danger')
-        
-        return render_template('admin/edit_post.html', form=form, post=post)
+        # Passar os dados do webhook diretamente para o formulário
+        # O formulário espera os nomes dos campos correspondentes às chaves do dicionário
+        form = PostForm(data=post_data)
+        # Ou, se os nomes forem exatamente os mesmos: form = PostForm(**post_data)
         
     except requests.RequestException as e:
-        logger.error(f"Erro ao buscar/atualizar post: {str(e)}")
-        flash('Erro ao processar dados do post. Por favor, tente novamente.', 'danger')
+        logger.error(f"Erro ao buscar post para edição: {e}")
+        flash('Error fetching post data.', 'danger')
         return redirect(url_for('admin.all_posts'))
     except Exception as e:
-        logger.error(f"Erro inesperado ao processar post: {str(e)}")
-        flash('Ocorreu um erro inesperado. Por favor, tente novamente.', 'danger')
+        logger.error(f"Erro inesperado ao processar post: {e}") # Log do erro real
+        # logger.error(traceback.format_exc()) # Descomentar para traceback completo
+        flash('An unexpected error occurred while loading the post.', 'danger')
         return redirect(url_for('admin.all_posts'))
+        
+    # Renderizar o template com o formulário populado
+    return render_template('admin/edit_post.html', form=form, post_id=post_id)
 
 @admin_bp.route('/post/delete/<uuid:post_id>', methods=['POST'])
 @login_required

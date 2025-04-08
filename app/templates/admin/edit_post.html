@@ -10,11 +10,11 @@
 <div class="row">
     <div class="col-md-10 offset-md-1">
         <div class="card">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header" style="background-color: #f1f1f1; text-align: center;">
                 <h4 class="m-0">Editar Post</h4>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('admin.edit_post', post_id=post.id) }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ url_for('admin.edit_post', post_id=post_id) }}" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
                     
                     <div class="mb-3">
@@ -76,7 +76,7 @@
                             <div class="mb-3">
                                 {{ form.created_at.label(class="form-label") }}
                                 <input type="datetime-local" name="created_at" id="created_at" class="form-control" 
-                                       value="{{ post.created_at.strftime('%Y-%m-%dT%H:%M') if post.created_at else '' }}">
+                                       value="{{ form.created_at.data.strftime('%Y-%m-%dT%H:%M') if form.created_at.data else '' }}">
                                 <small class="form-text text-muted">{{ form.created_at.description }}</small>
                                 {% for error in form.created_at.errors %}
                                     <span class="text-danger">{{ error }}</span>
@@ -126,7 +126,7 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancelar</a>
-                            <a href="{{ url_for('main.post', post_id=post.id) }}" class="btn btn-info" target="_blank">Visualizar</a>
+                            <a href="{{ url_for('main.post', post_id=post_id) }}" class="btn btn-info" target="_blank">Visualizar</a>
                         </div>
                         <button type="submit" name="submit" class="btn btn-primary">Salvar Alterações</button>
                     </div>
