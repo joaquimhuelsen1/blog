@@ -565,6 +565,41 @@
                         {% include 'public/components/reconquest_test_banner.html' %}
                     </section>
                     
+                    {# --- ADICIONAR CARD PREMIUM AQUI --- #}
+                    <section class="mt-5">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-warning text-white">
+                                <h4 class="m-0 text-center"><i class="fas fa-crown me-2" style="color: #000;"></i> Subscribe to Premium</h4>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-2">Unlock weekly exclusive content crafted to transform your love life:</p>
+                                <ul class="list-unstyled mb-3">
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Monday:</strong> Reconquest strategies that really work</li>
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Wednesday:</strong> How to keep her by your side</li>
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Friday:</strong> Healing insights to overcome heartbreak</li>
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Weekend:</strong> Real case studies from students who made it</li>
+                                </ul>
+                                <p class="mb-2">Plus:</p>
+                                <ul class="list-unstyled mb-3">
+                                    <li><i class="fas fa-star text-warning me-1"></i> Advanced female psychology</li>
+                                    <li><i class="fas fa-star text-warning me-1"></i> Personalized support from Ethan</li>
+                                    <li><i class="fas fa-star text-warning me-1"></i> Surprise bonus content</li>
+                                </ul>
+                                <p class="text-center fw-bold mt-4">
+                                    <i class="fas fa-lock me-1"></i> Start your transformation. 👇
+                                </p>
+                                <p class="text-center text-success mb-2"><strong>14-DAY FREE TRIAL!</strong></p>
+                                {# Lógica para botão baseado no status do usuário #}
+                                {% if current_user.is_authenticated and current_user.is_premium %}
+                                <button class="btn btn-success w-100 text-white" disabled>YOU ARE ALREADY A PREMIUM USER</button>
+                                {% else %}
+                                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-warning w-100 text-white" onclick="gtag('event', 'clique_card_premium', {'event_category': 'Engajamento', 'event_label': 'Card Premium Post', 'value': 1});">Learn more</a> {# Ajustar event_label se necessário #}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+                    {# ---------------------------------- #}
+                    
                     <!-- Recent Posts Section -->
                     {% if recent_posts %}
                     <section class="recent-posts">
@@ -602,7 +637,7 @@
                                             {% endif %}
                                         </div>
                                         <p class="recent-post-summary my-2">{{ recent.summary|truncate(100) }}</p>
-                                        <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary mt-2">Read post</a>
+                                        <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary mt-2 read-post-link">Read post</a>
                                     </div>
                                 </div>
                             </div>
@@ -655,6 +690,11 @@
         if (commentForm && submitButton && spinner) {
             commentForm.addEventListener('submit', function(e) {
                 e.preventDefault(); // Prevent default form submission
+                
+                // Check if button is already disabled
+                if (submitButton.disabled) {
+                    return; // Do nothing if already submitting
+                }
                 
                 // Disable button and show spinner
                 submitButton.disabled = true;

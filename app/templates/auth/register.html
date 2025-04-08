@@ -90,19 +90,31 @@ document.addEventListener('DOMContentLoaded', function() {
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Seleciona o formulário pelo action URL gerado pelo Flask
     const formAction = "{{ url_for('auth.register') }}";
     const registrationForm = document.querySelector(`form[action="${formAction}"]`);
+
     if (registrationForm) {
-        registrationForm.addEventListener('submit', function() {
-            const submitButton = registrationForm.querySelector('input[type="submit"], button[type="submit"]');
-            if (submitButton) {
+        registrationForm.addEventListener('submit', function(event) {
+            // Encontra o botão de submit DENTRO deste formulário específico
+            const submitButton = registrationForm.querySelector('input[type="submit"], button[type="submit"]'); 
+            if (submitButton && !submitButton.disabled) {
                 submitButton.disabled = true;
-                // Optional: Change button text to indicate loading
+                
+                // Muda o texto baseado no tipo de botão
                 if (submitButton.tagName === 'INPUT') {
-                    submitButton.value = 'Sending...';
+                    submitButton.value = 'Sending...'; // Para <input type="submit">
                 } else {
-                    submitButton.textContent = 'Sending...';
+                    submitButton.textContent = 'Sending...'; // Para <button>
                 }
+                
+                // Adiciona um pequeno delay para garantir que a desativação ocorra visualmente antes do envio
+                // setTimeout(() => { /* O envio do formulário continua */ }, 50); 
+                // Nota: O delay pode não ser estritamente necessário, mas pode ajudar em alguns navegadores.
+            } else {
+                 // Se o botão já está desabilitado, previne envio adicional (redundante mas seguro)
+                 // event.preventDefault(); 
+                 // Removido preventDefault aqui para garantir que o primeiro envio válido ocorra.
             }
         });
     }

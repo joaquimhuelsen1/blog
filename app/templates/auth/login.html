@@ -59,11 +59,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const formAction = "{{ url_for('auth.login') }}";
     const loginForm = document.querySelector(`form[action="${formAction}"]`); 
     if (loginForm) {
-        loginForm.addEventListener('submit', function() {
+        loginForm.addEventListener('submit', function(event) {
             const submitButton = loginForm.querySelector('input[type="submit"]');
-            if (submitButton) {
+            if (submitButton && !submitButton.disabled) {
                 submitButton.disabled = true;
                 submitButton.value = 'Signing In...'; // Change button text
+            } else {
+                // event.preventDefault(); // Prevent extra submits if already disabled
             }
         });
     }

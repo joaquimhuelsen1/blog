@@ -148,14 +148,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- ADDED: Disable submit button on form submit ---
-    const formAction = "{{ url_for('auth.verify_registration_otp') }}";
-    const otpForm = document.querySelector(`form[action="${formAction}"]`);
+    const formActionOtp = "{{ url_for('auth.verify_registration_otp') }}";
+    const otpForm = document.querySelector(`form[action="${formActionOtp}"]`);
     if (otpForm) {
-        otpForm.addEventListener('submit', function() {
-            const submitButton = otpForm.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.textContent = 'Verifying...'; // Change button text
+        otpForm.addEventListener('submit', function(event) {
+            const submitButtonOtp = otpForm.querySelector('button[type="submit"]');
+            if (submitButtonOtp && !submitButtonOtp.disabled) {
+                submitButtonOtp.disabled = true;
+                submitButtonOtp.textContent = 'Verifying...'; // Change button text
+            } else {
+                 // event.preventDefault(); // Prevent extra submits if already disabled
             }
         });
     }
