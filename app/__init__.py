@@ -447,41 +447,46 @@ def create_app():
     
     # Registrar blueprints - Verificar se o módulo ou o pacote existe
     try:
-        # Primeiro tentar importar do arquivo app/routes.py
-        from app.routes import main_bp, auth_bp, admin_bp, user_bp, temp_bp, ai_chat_bp
+        # --- PRIORIZAR IMPORTAÇÃO DA PASTA --- 
+        logger.info("Tentando importar blueprints da pasta app/routes/")
+        from app.routes.main import main_bp
+        from app.routes.auth import auth_bp
+        from app.routes.admin import admin_bp
+        from app.routes.user import user_bp
+        from app.routes.temporary import temp_bp
+        from app.routes.ai_chat import ai_chat_bp
         
-        # Register blueprints
+        # Registrar todos os blueprints
         app.register_blueprint(main_bp)
         app.register_blueprint(auth_bp, url_prefix='/auth')
         app.register_blueprint(admin_bp, url_prefix='/admin')
         app.register_blueprint(user_bp, url_prefix='/user')
         app.register_blueprint(temp_bp, url_prefix='/temp')
         app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
-        logger.info("✅ Blueprints registrados do arquivo app/routes.py")
-    except ImportError as e:
-        logger.warning(f"Erro ao importar do arquivo app/routes.py: {str(e)}")
-        # Caso falhe, tentar importar do pacote app.routes (pasta)
+        logger.info("✅ Blueprints registrados da pasta app/routes/")
+
+    except ImportError as e_folder:
+        logger.warning(f"Falha ao importar da pasta app/routes/: {str(e_folder)}")
+        logger.warning("Tentando importar blueprints do arquivo app/routes.py (legado?)")
+        # Caso falhe, tentar importar do arquivo app/routes.py (estrutura antiga?)
         try:
-            from app.routes.main import main_bp
-            from app.routes.auth import auth_bp
-            from app.routes.admin import admin_bp
-            from app.routes.user import user_bp
-            from app.routes.temporary import temp_bp
-            from app.routes.ai_chat import ai_chat_bp
+            # Primeiro tentar importar do arquivo app/routes.py
+            from app.routes import main_bp, auth_bp, admin_bp, user_bp, temp_bp, ai_chat_bp
             
-            # Registrar todos os blueprints, incluindo o main_bp
+            # Register blueprints
             app.register_blueprint(main_bp)
             app.register_blueprint(auth_bp, url_prefix='/auth')
             app.register_blueprint(admin_bp, url_prefix='/admin')
             app.register_blueprint(user_bp, url_prefix='/user')
             app.register_blueprint(temp_bp, url_prefix='/temp')
             app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
-            logger.info("✅ Blueprints registrados da pasta app/routes/")
-        except ImportError as e:
-            logger.error(f"❌ ERRO FATAL: Não foi possível importar os blueprints: {str(e)}")
+            logger.info("✅ Blueprints registrados do arquivo app/routes.py")
+        except ImportError as e_file:
+            logger.error(f"❌ ERRO FATAL: Não foi possível importar os blueprints nem da pasta nem do arquivo: {str(e_file)}")
     
     with app.app_context():
         # Importações que dependem do contexto da aplicação
+        # Mover importação de modelos para dentro do contexto se possível ou necessário
         from app.models import User, Post
         
         # Tentar verificar o banco de dados

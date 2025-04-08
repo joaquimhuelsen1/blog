@@ -269,11 +269,15 @@
     .post-content ul, .post-content ol {
         margin: 1.5rem 0;
         padding-left: 2rem;
-        color: #ff0000;
     }
     
     .post-content li {
         margin-bottom: 0.5rem;
+    }
+
+    /* Adicionada regra para colorir APENAS o marcador */
+    .post-content li::marker {
+        color: #ff0000; 
     }
     
     .post-content code {
@@ -457,11 +461,16 @@
                     <i class="far fa-user"></i> {{ post.author.username if post.author else 'Ethan Heyes' }}
                 </span>
                 <span class="post-date">
-                    <i class="far fa-calendar-alt"></i> {{ post.created_at.strftime('%m/%d/%Y') if post.created_at else '03/26/2025' }}
+                    <i class="far fa-calendar-alt"></i> {{ post.created_at_formatted }}
                 </span>
                 <span class="post-reading-time">
-                    <i class="far fa-clock"></i> {{ post.get_reading_time() if post.get_reading_time else '17' }} min read
+                    <i class="far fa-clock"></i> {{ post.reading_time if post.reading_time else '17' }} min read
                 </span>
+                {% if post.type_content %}
+                <span class="post-topic">
+                    <i class="fas fa-tag"></i> {{ post.type_content }}
+                </span>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -487,15 +496,6 @@
                         {{ post.content | markdown | safe }}
                         {% endif %}
                     </div>
-                    
-                    {% if post.premium_only and current_user.is_premium %}
-                        <div class="card mb-4 mt-5 bg-light">
-                            <div class="card-body">
-                                <h5 class="card-title">Premium Content</h5>
-                                <p>Thank you for being a premium subscriber! You have access to all exclusive content.</p>
-                            </div>
-                        </div>
-                    {% endif %}
                     
                     <!-- Comments section -->
                     <section class="comments-section mt-5 pt-4 border-top">
@@ -545,7 +545,7 @@
                                         </div>
                                         <div>
                                             <h5 class="card-title mb-0">{{ comment.author.username }}</h5>
-                                            <p class="text-muted small">{{ comment.created_at.strftime('%m/%d/%Y at %H:%M') }}</p>
+                                            <p class="text-muted small">{{ comment.created_at.strftime('%m/%d/%Y') }}</p>
                                         </div>
                                     </div>
                                     <p class="card-text">{{ comment.content }}</p>
@@ -586,14 +586,19 @@
                                         <h5 class="recent-post-title">{{ recent.title }}</h5>
                                         <div class="recent-post-meta mb-2">
                                             <span>
-                                                <i class="far fa-user"></i> {{ recent.author.username if recent.author else 'Ethan Heyes' }}
+                                                <i class="far fa-user"></i> {{ recent.author_obj.username if recent.author_obj else 'Ethan Heyes' }}
                                             </span>
                                             <span>
-                                                <i class="far fa-calendar-alt"></i> {{ recent.created_at.strftime('%m/%d/%Y') }}
+                                                <i class="far fa-calendar-alt"></i> {{ recent.created_at_formatted }}
                                             </span>
                                             <span>
-                                                <i class="far fa-clock"></i> {{ recent.get_reading_time() }} min read
+                                                <i class="far fa-clock"></i> {{ recent.reading_time if recent.reading_time else 'N/A' }} min read
                                             </span>
+                                            {% if recent.type_content %}
+                                            <span>
+                                                <i class="fas fa-tag"></i> {{ recent.type_content }}
+                                            </span>
+                                            {% endif %}
                                         </div>
                                         <p class="recent-post-summary my-2">{{ recent.summary|truncate(100) }}</p>
                                         <a href="{{ url_for('main.post', post_id=recent.id) }}" class="btn btn-sm btn-primary mt-2">Read post</a>

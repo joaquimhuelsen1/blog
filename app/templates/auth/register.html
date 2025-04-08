@@ -13,65 +13,16 @@
                 <div class="card-body">
                     {% include '_messages.html' %}
                     
-                    {% if email_sent %}
-                    <div class="text-center py-4">
-                        <div class="mb-4">
-                            <i class="fas fa-envelope-open-text fa-4x text-success"></i>
-                        </div>
-                        <h4 class="mb-3">Confirmation Email Sent</h4>
-                        <p class="mb-3">A confirmation link has been sent to your email:</p>
-                        <p class="mb-4"><strong>{{ email }}</strong></p>
-                        <p>Please check your inbox and spam folder to complete your registration.</p>
-                        <div class="mt-4">
-                            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Go to Login</a>
-                        </div>
-                    </div>
-                    {% else %}
+                    {% if not show_otp_form %}
                     <form method="POST" action="{{ url_for('auth.register') }}">
-                        <!-- CSRF desativado para resolver erros -->
-                        
-                        <div class="form-group mb-3">
-                            {{ form.username.label(class="form-label") }}
-                            {{ form.username(class="form-control") }}
-                            {% for error in form.username.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
+                        <input type="hidden" name="action" value="register_user">
+                        {{ form.hidden_tag() if form.hidden_tag }}
                         
                         <div class="form-group mb-3">
                             {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control") }}
+                            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), autofocus=true) }}
                             {% for error in form.email.errors %}
                                 <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            {{ form.password.label(class="form-label") }}
-                            <div class="input-group">
-                                {{ form.password(class="form-control", id="password") }}
-                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                            {% for error in form.password.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            {{ form.confirm_password.label(class="form-label") }}
-                            {{ form.confirm_password(class="form-control", id="confirmPassword") }}
-                            {% for error in form.confirm_password.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="form-check mb-3">
-                            {{ form.terms(class="form-check-input") }}
-                            {{ form.terms.label(class="form-check-label") }}
-                            {% for error in form.terms.errors %}
-                                <small class="text-danger d-block">{{ error }}</small>
                             {% endfor %}
                         </div>
                         
@@ -80,8 +31,35 @@
                         </div>
                     </form>
                     {% endif %}
+
+                    {% if show_otp_form %}
+                    <div class="otp-section">
+                        <p class="mb-3 text-info">Enviamos um código de 6 dígitos para o seu e-mail: <strong>{{ otp_email }}</strong></p>
+                        <p>Por favor, insira o código abaixo para completar seu registro.</p>
+                        
+                        <form method="POST" action="{{ url_for('auth.register') }}">
+                            <input type="hidden" name="action" value="verify_otp">
+                            
+                            <div class="mb-3">
+                                {{ otp_form.otp.label(class="form-label") }}
+                                {{ otp_form.otp(class="form-control" + (" is-invalid" if otp_form.otp.errors else ""), autofocus=true, inputmode="numeric", pattern="[0-9]*", autocomplete="one-time-code", maxlength="6") }}
+                                {% for error in otp_form.otp.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">Verificar Código</button>
+                        </form>
+                        
+                        <hr>
+                        <p class="text-center text-muted small">
+                            Não recebeu o código? <a href="{{ url_for('auth.resend_otp') }}">Reenviar código</a>
+                        </p>
+                    </div>
+                    {% endif %}
+
                 </div>
-                {% if not email_sent %}
+                {% if not show_otp_form %}
                 <div class="card-footer">
                     <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
                 </div>

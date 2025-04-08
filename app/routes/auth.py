@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_user, logout_user, login_required, current_user
 from app import db
 from app.models import User
-from app.forms import LoginForm, RegistrationForm, ProfileUpdateForm, PasswordChangeForm
-from urllib.parse import urlsplit, urlparse
+from app.forms import LoginForm, RegistrationForm, VerifyOtpForm, ProfileUpdateForm, PasswordChangeForm
+from urllib.parse import urlsplit, urlparse, urljoin
 import logging
 import traceback
 from datetime import datetime, timedelta
@@ -17,6 +17,7 @@ import secrets
 import uuid
 import hashlib
 from werkzeug.security import generate_password_hash
+from markupsafe import Markup
 
 # Configurar logging
 logging.basicConfig(
@@ -34,6 +35,14 @@ auth_bp = Blueprint('auth', __name__)
 
 # Instanciar CSRFProtect
 csrf = CSRFProtect()
+
+# --- Helper function to check for safe URLs ---
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and \
+           ref_url.netloc == test_url.netloc
+# --------------------------------------------
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -209,10 +218,18 @@ def login():
                             # Log dos dados salvos na sessão
                             logger.info(f"Dados salvos na sessão: {session['user_data']}")
                             
+                            # --- REDIRECT LOGIC ---
+                            # Prioritize 'next' from URL parameter, then from session
                             next_page = request.args.get('next')
-                            if not next_page or urlparse(next_page).netloc != '':
-                                next_page = url_for('main.index')
+                            if not next_page or not is_safe_url(next_page):
+                                next_page = session.pop('next_url', None) # Check session if URL param invalid/missing
+                                if not next_page or not is_safe_url(next_page):
+                                    next_page = url_for('main.index') # Default
+
+                            logger.info(f"Login successful, redirecting to: {next_page}")
                             return redirect(next_page)
+                            # ----------------------
+
                         except Exception as header_error:
                             logger.error(f"Erro ao processar dados do usuário: {str(header_error)}")
                             logger.error(traceback.format_exc())
@@ -232,6 +249,13 @@ def login():
                 logger.error(traceback.format_exc())
                 flash('An error occurred during login. Please try again.', 'danger')
         
+        # GET request or failed POST validation
+        # --- PASS NEXT URL TO TEMPLATE (Optional but good practice) ---
+        # Store next_url from parameter in session if user needs to register instead
+        next_url_param = request.args.get('next')
+        if next_url_param and is_safe_url(next_url_param):
+            session['next_url'] = next_url_param
+        # -------------------------------------------------------------
         return render_template('auth/login.html', form=form)
     except Exception as e:
         logger.error(f"Erro no login: {str(e)}")
@@ -254,98 +278,215 @@ def logout():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    try:
-        if current_user.is_authenticated:
-            return redirect(url_for('main.index'))
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
         
-        form = RegistrationForm()
+    form = RegistrationForm() # Agora só tem email
+    if form.validate_on_submit():
+        email = form.email.data
         
-        if form.validate_on_submit():
-            try:
-                # Enviar dados para o webhook de registro
-                webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+        webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
+        if not webhook_url:
+            logger.error("WEBHOOK_REGISTRATION não configurado no .env")
+            flash('Erro de configuração do servidor.', 'danger')
+            return render_template('auth/register.html', title='Registrar', form=form)
+
+        try:
+            logger.info(f"Enviando solicitação de OTP para webhook: {webhook_url} para email: {email}")
+            payload = {
+                'email': email,
+                'event': 'request_otp' # Somente email agora
+            }
+            response = requests.post(webhook_url, json=payload, timeout=15)
+            
+            # Verificar se o webhook aceitou (pode retornar erro no JSON mesmo com 200)
+            try: 
+                response_data = response.json()
+                logger.info(f"Resposta JSON do WEBHOOK_REGISTRATION: {response_data}")
+                status = None
+                if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                     status = response_data[0].get('status')
+                elif isinstance(response_data, dict):
+                     status = response_data.get('status')
                 
-                if not webhook_url:
-                    logger.error("WEBHOOK_REGISTRATION não configurado")
-                    flash('Error in configuration. Please try again later.', 'danger')
-                    return render_template('auth/register.html', form=form)
-                
-                # Preparar dados para o webhook
-                data = {
-                    'username': form.username.data,
-                    'email': form.email.data,
-                    'password': form.password.data,
-                    'event': 'register'
-                }
-
-                headers = {
-                    'Content-Type': 'application/json'
-                }
-
-                logger.info(f"Enviando requisição para webhook: {webhook_url}")
-                logger.info(f"Dados: {data}")
-
-                response = requests.post(
-                    webhook_url,
-                    json=data,
-                    headers=headers,
-                    timeout=10
-                )
-                
-                logger.info(f"Status: {response.status_code}")
-                logger.info(f"Resposta: {response.text}")
-
-                if response.status_code == 200:
-                    # Verificar a resposta JSON
-                    try:
-                        response_data = response.json()
-                        
-                        # Verificar o status, independentemente se vier como objeto ou array
-                        status = None
-                        
-                        # Se for um array, pegar o status do primeiro item
-                        if isinstance(response_data, list) and len(response_data) > 0:
-                            status = response_data[0].get('status')
-                        # Se for um objeto direto, pegar o status dele
-                        elif isinstance(response_data, dict):
-                            status = response_data.get('status')
-                        
-                        logger.info(f"Status extraído da resposta: {status}")
-                        
-                        # Caso 1: Usuário já existe
-                        if status == 'false':
-                            logger.warning(f"Tentativa de registro com email já existente: {form.email.data}")
-                            flash('This email is already registered. Please use a different email or try to recover your password.', 'danger')
-                            return render_template('auth/register.html', form=form)
-                        
-                        # Caso 2: Registro realizado com sucesso
-                        elif status == 'success':
-                            logger.info(f"Usuário registrado com sucesso: {form.email.data}")
-                            flash('We have sent a confirmation link to your email. Please check your inbox and spam folder.', 'success')
-                            return render_template('auth/register.html', form=form, email_sent=True, email=form.email.data)
-                            
-                    except Exception as json_error:
-                        logger.error(f"Erro ao processar JSON da resposta: {str(json_error)}")
-                    
-                    # Caso padrão (se não conseguir processar o JSON ou se o formato for diferente)
-                    flash('We have sent a confirmation link to your email. Please check your inbox and spam folder.', 'success')
-                    return render_template('auth/register.html', form=form, email_sent=True, email=form.email.data)
+                # Sucesso implica que o OTP PODE ser enviado (webhook aceitou)
+                if response.status_code < 300 and (status == 'success' or status is None): # Aceitar 2xx e status success ou ausente
+                    logger.info(f"Webhook aceitou solicitação de OTP para {email}.")
+                    session['otp_email_for_registration'] = email # Usar chave diferente da recuperação
+                    flash('Enviamos um código de verificação para o seu e-mail.', 'info')
+                    return redirect(url_for('auth.verify_registration_otp'))
                 else:
-                    logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                    flash('Error processing your request. Please try again.', 'danger')
-                    return render_template('auth/register.html', form=form)
-                    
-            except Exception as e:
-                logger.error(f"Erro ao criar usuário: {str(e)}")
-                logger.error(traceback.format_exc())
-                flash('An error occurred while creating your account. Please try again.', 'danger')
-                return render_template('auth/register.html', form=form)
-        
-        return render_template('auth/register.html', form=form)
-    except Exception as e:
-        logger.error(f"Erro no registro: {str(e)}")
-        flash('An error occurred. Please try again.', 'danger')
+                     # Erro lógico retornado pelo webhook (ex: email inválido, rate limit, já registrado?)
+                     error_message = response_data.get('message', 'Não foi possível iniciar o registro para este e-mail.')
+                     logger.warning(f"Webhook negou solicitação para {email}: Status={status}, Msg={error_message}")
+                     flash(error_message, 'danger')
+                     
+            except ValueError: # Não retornou JSON válido
+                 logger.error(f"Webhook (REGISTRATION) não retornou JSON válido. Status: {response.status_code}, Resposta: {response.text}")
+                 if response.status_code >= 400:
+                      response.raise_for_status() # Re-levanta erro HTTP
+                 else:
+                      flash('Erro de comunicação ao iniciar registro.', 'danger')
+
+        except requests.exceptions.RequestException as req_err:
+            logger.error(f"Erro de rede ao chamar WEBHOOK_REGISTRATION para {email}: {req_err}")
+            flash('Erro ao conectar ao serviço de autenticação. Tente novamente.', 'danger')
+        except Exception as e:
+            # Erro HTTP ou outro erro geral
+            # ... (lógica de tratamento de erro genérico mantida) ...
+            error_message = f"Erro inesperado ao solicitar OTP: {e}"
+            # ... (extrair mensagem se possível) ...
+            flash(f"Erro inesperado: {error_message}", 'danger')
+
+    # GET ou POST com erro
+    return render_template('auth/register.html', title='Registrar', form=form)
+
+# --- Nova Rota para Verificar OTP do Registro --- 
+@auth_bp.route('/verify-registration-otp', methods=['GET', 'POST'])
+def verify_registration_otp():
+    email = session.get('otp_email_for_registration')
+    if not email:
+        flash('Sessão inválida ou expirada. Por favor, insira seu e-mail novamente.', 'warning')
         return redirect(url_for('auth.register'))
+
+    form = VerifyOtpForm() # Agora com todos os campos
+
+    if form.validate_on_submit():
+        otp = form.otp.data
+        username = form.username.data
+        password = form.password.data
+        
+        webhook_url = os.environ.get('WEBHOOK_AUTHENTICATE_OTP')
+        if not webhook_url:
+            logger.error("WEBHOOK_AUTHENTICATE_OTP não configurado no .env")
+            flash('Erro de configuração do servidor.', 'danger')
+            return render_template('auth/verify_registration_otp.html', title='Completar Registro', form=form, email=email)
+
+        try:
+            logger.info(f"Enviando verificação OTP e dados de usuário para webhook: {webhook_url} para email: {email}")
+            payload = {
+                'email': email, 
+                'otp': otp, 
+                'username': username,
+                'password': password, # Enviar senha em texto puro
+                'event': 'verify_otp_and_register' # Novo evento?
+            }
+            response = requests.post(webhook_url, json=payload, timeout=15)
+            response.raise_for_status()
+
+            response_data = response.json()
+            logger.info(f"Resposta do WEBHOOK_AUTHENTICATE_OTP: {response_data}")
+
+            if isinstance(response_data, dict) and response_data.get('status') == 'success' and 'user' in response_data and 'session' in response_data:
+                user_data = response_data['user']
+                session_data = response_data['session']
+                
+                # Logar usuário no Flask (mesma lógica de antes)
+                flask_user = User(
+                    id=user_data.get('id'),
+                    email=user_data.get('email', email),
+                    username=user_data.get('username', username),
+                    is_admin=user_data.get('is_admin', False),
+                    is_premium=user_data.get('is_premium', False),
+                    age=user_data.get('age'),
+                    ai_credits=user_data.get('ai_credits', 0)
+                )
+                login_user(flask_user)
+                
+                # Armazenar dados na sessão Flask
+                session['user_data'] = user_data
+                session['supabase_access_token'] = session_data.get('access_token')
+                session['supabase_refresh_token'] = session_data.get('refresh_token')
+                session['supabase_user_id'] = user_data.get('id')
+                session.modified = True
+                session.pop('otp_email_for_registration', None)
+                
+                flash('Registration complete and successfully logged in!', 'success')
+
+                # --- REDIRECT LOGIC ---
+                next_url = session.pop('next_url', None) # Get and remove 'next_url'
+                if next_url and is_safe_url(next_url):
+                    logger.info(f"Redirecting to stored next_url: {next_url}")
+                    return redirect(next_url)
+                else:
+                    logger.info("No valid next_url found, redirecting to main.index")
+                    return redirect(url_for('main.index')) # Default redirect
+                # ----------------------
+
+            else:
+                # Erro retornado pelo webhook (OTP inválido, username existe, etc)
+                error_message = response_data.get('message', 'Não foi possível completar o registro.') if isinstance(response_data, dict) else 'Erro desconhecido.'
+                logger.warning(f"Falha na verificação/registro via webhook para {email}: {error_message}")
+                flash(error_message, 'danger')
+
+        except requests.exceptions.RequestException as req_err:
+            logger.error(f"Erro de rede ao chamar WEBHOOK_AUTHENTICATE_OTP para {email}: {req_err}")
+            flash('Erro ao conectar ao serviço de autenticação. Tente novamente.', 'danger')
+        except Exception as e:
+            # Erro HTTP ou outro erro geral
+            # ... (lógica de tratamento de erro genérico mantida) ...
+            error_message = f"Erro inesperado ao verificar OTP: {e}"
+            # ... (extrair mensagem se possível) ...
+            flash(f"Erro inesperado: {error_message}", 'danger')
+            
+    # GET ou POST com erro
+    return render_template('auth/verify_registration_otp.html', title='Complete Registration', form=form, email=email)
+
+# Rota resend_otp ajustada
+@auth_bp.route('/resend-otp', methods=['GET'])
+def resend_otp():
+    # Usar a chave de sessão correta
+    email = session.get('otp_email_for_registration') 
+    if not email:
+        flash('Sessão inválida ou expirada para reenviar OTP.', 'warning')
+        return redirect(url_for('auth.register'))
+
+    webhook_url = os.environ.get('WEBHOOK_REGISTRATION') 
+    if not webhook_url:
+        logger.error("WEBHOOK_REGISTRATION não configurado para reenvio")
+        flash('Erro de configuração do servidor.', 'danger')
+        return redirect(url_for('auth.verify_registration_otp')) # Volta para a tela OTP correta
+        
+    try:
+        logger.info(f"Enviando REENVIO de OTP para webhook: {webhook_url} para email: {email}")
+        payload = {
+            'email': email,
+            'event': 'request_otp' 
+        }
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        # Verificar resposta como no registro inicial
+        try:
+            response_data = response.json()
+            status = None
+            if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                 status = response_data[0].get('status')
+            elif isinstance(response_data, dict):
+                 status = response_data.get('status')
+            
+            if response.status_code < 300 and (status == 'success' or status is None):
+                 logger.info(f"Webhook aceitou REENVIO de OTP para {email}")
+                 flash('Um novo código OTP foi enviado para o seu e-mail.', 'info')
+            else:
+                 error_message = response_data.get('message', 'Não foi possível reenviar o código.')
+                 logger.warning(f"Webhook negou REENVIO para {email}: Status={status}, Msg={error_message}")
+                 flash(error_message, 'danger')
+                 
+        except ValueError:
+             logger.error(f"Webhook (REENVIO) não retornou JSON válido. Status: {response.status_code}")
+             if response.status_code >= 400:
+                  response.raise_for_status()
+             else:
+                  flash('Erro de comunicação ao reenviar.', 'danger')
+
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"Erro de rede ao REENVIAR OTP: {req_err}")
+        flash('Erro ao conectar para reenviar. Tente novamente.', 'danger')
+    except Exception as e:
+        # ... (lógica de tratamento de erro genérico mantida) ...
+        flash(f"Erro inesperado ao reenviar: {str(e)}", 'danger')
+
+    # Redireciona de volta para a página de verificação OTP correta
+    return redirect(url_for('auth.verify_registration_otp'))
 
 @auth_bp.route('/profile', methods=['GET', 'POST'])
 @login_required

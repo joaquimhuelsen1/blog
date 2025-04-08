@@ -15,60 +15,8 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Sign In')
 
 class RegistrationForm(FlaskForm):
-    # Desabilitar CSRF no formulário
-    class Meta:
-        csrf = False
-        
-    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
     email = StringField('Email', validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
-    terms = BooleanField('I agree to the terms of service', validators=[DataRequired()])
-    submit = SubmitField('Register')
-    
-    def validate_username(self, username):
-        try:
-            user = User.query.filter_by(username=username.data).first()
-            if user:
-                raise ValidationError('This username is already taken. Please choose a different one.')
-        except Exception as e:
-            # Se houver erro de SSL ou DB, permitir o registro para continuar
-            if 'SSL' in str(e) or 'OperationalError' in str(e) or 'decryption failed' in str(e):
-                # Log o erro mas não falhe
-                import logging
-                logger = logging.getLogger('auth_debug')
-                logger.warning(f"Erro de conexão durante validação de username, assumindo disponível: {str(e)}")
-                # Assume que o nome de usuário está disponível se não puder verificar
-                return True
-            else:
-                # Se for outro tipo de erro, logar para debug
-                import logging
-                logger = logging.getLogger('auth_debug')
-                logger.error(f"Erro não relacionado a SSL durante validação: {str(e)}")
-                # Ainda permite continuar caso seja algum problema temporário
-                return True
-    
-    def validate_email(self, email):
-        try:
-            user = User.query.filter_by(email=email.data).first()
-            if user:
-                raise ValidationError('This email address is already registered. Please use a different email address.')
-        except Exception as e:
-            # Se houver erro de SSL ou DB, permitir o registro para continuar
-            if 'SSL' in str(e) or 'OperationalError' in str(e) or 'decryption failed' in str(e):
-                # Log o erro mas não falhe
-                import logging
-                logger = logging.getLogger('auth_debug')
-                logger.warning(f"Erro de conexão durante validação de email, assumindo disponível: {str(e)}")
-                # Assume que o email está disponível se não puder verificar
-                return True
-            else:
-                # Se for outro tipo de erro, logar para debug
-                import logging
-                logger = logging.getLogger('auth_debug')
-                logger.error(f"Erro não relacionado a SSL durante validação: {str(e)}")
-                # Ainda permite continuar caso seja algum problema temporário
-                return True
+    submit = SubmitField('Enviar Código de Verificação')
 
 class PostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=100)])
@@ -78,14 +26,14 @@ class PostForm(FlaskForm):
     image_url = StringField('Image URL', validators=[Optional(), URL()], description="Enter a URL for the post's cover image. If left empty, a placeholder will be used.")
     reading_time = IntegerField('Reading Time (minutes)', validators=[Optional(), NumberRange(min=1, max=60)], description="Estimated reading time in minutes. Leave empty for automatic calculation.")
     created_at = DateTimeField('Publication Date', format='%Y-%m-%dT%H:%M', validators=[Optional()], default=datetime.utcnow, description="Publication date and time. Leave empty to use current date.")
-    status = SelectField('Status', choices=[('agendado', 'Agendado'), ('postar agora', 'Postar Agora')], default='agendado', description="Define se o post será agendado ou publicado imediatamente.")
+    status = SelectField('Status', choices=[('agendado', 'Agendado'), ('postar agora', 'Postar Agora')], default='agendado', description="Define if the post will be scheduled or published immediately.")
     type_content = SelectField('Tipo de Conteúdo', choices=[
         ('winning back', 'Winning Back'), 
         ('stay connected', 'Stay Connected'), 
         ('overcoming', 'Overcoming'), 
         ('case analysis', 'Case Analysis')
-    ], validators=[Optional()], description="Categoria do conteúdo.")
-    notion_url = StringField('Notion URL', validators=[Optional(), URL()], description="Link para documento relacionado no Notion.")
+    ], validators=[Optional()], description="Content category.")
+    notion_url = StringField('Notion URL', validators=[Optional(), URL()], description="Link to related document in Notion.")
     premium_only = BooleanField('Premium Only', default=False, description="If checked, only premium users will be able to access this post.")
     submit = SubmitField('Save Post')
 
@@ -135,4 +83,20 @@ class UserProfileForm(FlaskForm):
     password = PasswordField('Nova senha', validators=[Optional(), Length(min=6)])
     confirm_password = PasswordField('Confirmar nova senha', validators=[Optional(), EqualTo('password', message='As senhas devem ser iguais')])
     age = IntegerField('Idade', validators=[Optional(), NumberRange(min=18, max=120)], description="Opcional. Você pode deixar este campo em branco.")
-    submit = SubmitField('Atualizar perfil') 
+    submit = SubmitField('Atualizar perfil')
+
+class VerifyOtpForm(FlaskForm):
+    otp = StringField('Code 6 digits', validators=[
+        DataRequired(), 
+        Length(min=6, max=6, message='The OTP code must be 6 digits long.')
+    ])
+    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirm Password', 
+                                 validators=[DataRequired(), 
+                                             EqualTo('password', message='Passwords must match.')])
+    submit = SubmitField('Verify and Register')
+    # Adicionar validações se o webhook não as fizer (ex: username já existe)
+    # def validate_username(self, username):
+    #     # Lógica para verificar via webhook se necessário
+    #     pass 

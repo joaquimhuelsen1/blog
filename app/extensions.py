@@ -4,6 +4,9 @@ Flask extensions instance
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_mail import Mail
+import logging
+
+logger = logging.getLogger('blog_app_extensions')
 
 # Initialize extensions
 db = SQLAlchemy()
