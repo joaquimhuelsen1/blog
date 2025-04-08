@@ -313,7 +313,8 @@ def register():
                 if response.status_code < 300 and (status == 'success' or status is None): # Aceitar 2xx e status success ou ausente
                     logger.info(f"Webhook aceitou solicitação de OTP para {email}.")
                     session['otp_email_for_registration'] = email # Usar chave diferente da recuperação
-                    flash('Enviamos um código de verificação para o seu e-mail.', 'info')
+                    flash('We sent a verification code to your email.', 'info')
+                    session.modified = True # Force session save before redirect
                     return redirect(url_for('auth.verify_registration_otp'))
                 else:
                      # Erro lógico retornado pelo webhook (ex: email inválido, rate limit, já registrado?)
@@ -346,7 +347,7 @@ def register():
 def verify_registration_otp():
     email = session.get('otp_email_for_registration')
     if not email:
-        flash('Sessão inválida ou expirada. Por favor, insira seu e-mail novamente.', 'warning')
+        flash('Invalid or expired session. Please enter your email again.', 'warning')
         return redirect(url_for('auth.register'))
 
     form = VerifyOtpForm() # Agora com todos os campos
