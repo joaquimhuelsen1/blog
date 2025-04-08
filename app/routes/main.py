@@ -567,26 +567,22 @@ def start_premium_checkout():
              # Redirecionar para um local apropriado, como o perfil ou dashboard
              return redirect(url_for('user.profile')) # Ou main.index
 
-        # 2. Criar a sessão de checkout do Stripe
-        # Substitua isso pela sua lógica real de criação da sessão
-        # stripe_checkout_url = create_stripe_session(current_user.id, current_user.email) # Exemplo
-
-        # --- Simulação ---
-        # Apenas para exemplo, vamos simular um link e um erro
-        import random
-        if random.choice([True, False]): # Simula sucesso ou falha
-            # Simulação de URL de checkout
-            stripe_checkout_url = f"https://checkout.stripe.com/pay/cs_test_ABC123XYZ?prefilled_email={current_user.email}"
-            logger.info(f"Sessão Stripe criada (simulada), redirecionando para: {stripe_checkout_url}")
-            return redirect(stripe_checkout_url, code=303)
-        else:
-             stripe_checkout_url = None
-             logger.error(f"Falha ao criar sessão Stripe (simulada) para usuário {current_user.id}")
-        # --- Fim Simulação ---
-
-        if not stripe_checkout_url:
-            flash('Could not initiate the subscription process. Please try again later or contact support.', 'danger')
-            return redirect(url_for('main.premium_subscription')) # Volta para a página premium
+        # 2. Montar a URL de checkout do Stripe com o e-mail preenchido
+        base_stripe_url = "https://buy.stripe.com/4gw8zQe7Lg1Qac000n"
+        
+        # Obter o email do usuário logado
+        user_email = current_user.email
+        
+        # Adicionar o parâmetro prefilled_email
+        # A biblioteca requests faria a codificação, mas para redirect direto,
+        # é geralmente seguro concatenar assim, a menos que o email tenha caracteres muito especiais.
+        # Para robustez, poderíamos usar urllib.parse.urlencode, mas vamos manter simples por agora.
+        stripe_checkout_url = f"{base_stripe_url}?prefilled_email={user_email}"
+        
+        logger.info(f"Redirecionando usuário {current_user.id} para Stripe URL: {stripe_checkout_url}")
+        
+        # Redirecionar para o Stripe
+        return redirect(stripe_checkout_url, code=303) # 303 See Other é recomendado para POST -> GET redirect após ação
 
     except Exception as e:
         logger.error(f"Erro ao iniciar checkout premium para usuário {current_user.id}: {e}")

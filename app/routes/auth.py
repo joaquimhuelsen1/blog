@@ -487,9 +487,9 @@ def resend_otp():
         flash('Sessão inválida ou expirada para reenviar OTP.', 'warning')
         return redirect(url_for('auth.register'))
 
-    webhook_url = os.environ.get('WEBHOOK_REGISTRATION') 
+    webhook_url = os.environ.get('WEBHOOK_RESENDOTP')
     if not webhook_url:
-        logger.error("WEBHOOK_REGISTRATION não configurado para reenvio")
+        logger.error("WEBHOOK_RESENDOTP não configurado para reenvio")
         flash('Erro de configuração do servidor.', 'danger')
         return redirect(url_for('auth.verify_registration_otp')) # Volta para a tela OTP correta
         
