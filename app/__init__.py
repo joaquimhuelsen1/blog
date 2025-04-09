@@ -322,6 +322,30 @@ def create_app():
         return render_template('errors/500.html', error=str(e)), 500
     # ==> END MOVED ERROR HANDLERS <==
 
+    # --- UTM Parameter Capture Hook --- 
+    @app.before_request
+    def capture_utm_parameters():
+        """Capture UTM parameters from the URL and store them in the session."""
+        # Only capture if UTMs are present and we haven't captured them yet in this session
+        if not session.get('utm_captured') and \
+           any(arg.startswith('utm_') for arg in request.args):
+            
+            utm_data = {}
+            utm_keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+            found_any = False
+            for key in utm_keys:
+                value = request.args.get(key)
+                if value:
+                    utm_data[key] = value
+                    found_any = True
+            
+            if found_any:
+                session['utm_data'] = utm_data
+                session['utm_captured'] = True # Flag to prevent overwriting in the same session
+                session.modified = True # Ensure session is saved
+                logger.info(f"UTM parameters captured: {utm_data}")
+    # --- End UTM Capture Hook --- 
+
     logger.info("==== APLICAÇÃO FLASK INICIALIZADA COM SUCESSO ====")
     return app
 

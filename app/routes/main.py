@@ -10,7 +10,8 @@ import logging  # Adicionar para logs
 from datetime import datetime
 from dotenv import load_dotenv
 from types import SimpleNamespace
-import re # <--- Add import
+import re # <--- Keep this import
+# import stripe # <--- Remove Stripe import
 
 # Configurar logs
 logging.basicConfig(
@@ -683,16 +684,20 @@ def start_premium_checkout():
              return redirect(url_for('user.profile')) # Ou main.index
 
         # 2. Montar a URL de checkout do Stripe com o e-mail preenchido
-        base_stripe_url = "https://buy.stripe.com/4gw8zQe7Lg1Qac000n"
+        # Use o link direto do seu produto/preço no Stripe
+        base_stripe_url = os.environ.get('STRIPE_CHECKOUT_LINK') 
+        if not base_stripe_url:
+             logger.error("STRIPE_CHECKOUT_LINK not found in environment variables!")
+             flash('Payment system configuration error. Please contact support.', 'danger')
+             return redirect(url_for('main.premium_subscription'))
         
         # Obter o email do usuário logado
         user_email = current_user.email
         
         # Adicionar o parâmetro prefilled_email
-        # A biblioteca requests faria a codificação, mas para redirect direto,
-        # é geralmente seguro concatenar assim, a menos que o email tenha caracteres muito especiais.
-        # Para robustez, poderíamos usar urllib.parse.urlencode, mas vamos manter simples por agora.
-        stripe_checkout_url = f"{base_stripe_url}?prefilled_email={user_email}"
+        # Para robustez com caracteres especiais, usaríamos urlencode, mas para email é geralmente ok.
+        import urllib.parse
+        stripe_checkout_url = f"{base_stripe_url}?prefilled_email={urllib.parse.quote(user_email)}"
         
         logger.info(f"Redirecionando usuário {current_user.id} para Stripe URL: {stripe_checkout_url}")
         
@@ -701,6 +706,7 @@ def start_premium_checkout():
 
     except Exception as e:
         logger.error(f"Erro ao iniciar checkout premium para usuário {current_user.id}: {e}")
+        logger.error(traceback.format_exc())
         flash('An error occurred while preparing your subscription.', 'danger')
         return redirect(url_for('main.premium_subscription')) # Volta para a página premium
     # --- Fim da nova rota --- 
