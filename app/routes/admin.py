@@ -12,6 +12,8 @@ import logging
 from datetime import datetime
 from dateutil import parser
 import traceback
+from werkzeug.utils import secure_filename
+import uuid
 
 # Configurar logging
 logging.basicConfig(
@@ -324,8 +326,16 @@ def create_post():
             # Preparar arquivos para envio
             files = {}
             if form.image.data:
-                files['image'] = (form.image.data.filename, form.image.data.stream, form.image.data.content_type)
-                logger.info(f"Preparando para enviar imagem: {form.image.data.filename}")
+                # Processar o nome do arquivo com UUID, underscores e minúsculas
+                original_filename = form.image.data.filename
+                safe_filename = secure_filename(original_filename)
+                filename_with_underscores = safe_filename.replace(' ', '_') # Trocar espaço por underscore
+                lowercase_filename = filename_with_underscores.lower() # Converter para minúsculas
+                final_filename = f"{uuid.uuid4()}_{lowercase_filename}" # Adicionar UUID
+
+                # Usar o nome final no envio
+                files['image'] = (final_filename, form.image.data.stream, form.image.data.content_type)
+                logger.info(f"Preparando para enviar imagem: {final_filename}")
             else:
                  logger.info("Nenhuma nova imagem enviada.")
                  # Se não há imagem nova, garantir que image_url (se existir) seja enviado
@@ -460,8 +470,16 @@ def edit_post(post_id):
             # Preparar arquivos para envio
             files = {}
             if form.image.data:
-                files['image'] = (form.image.data.filename, form.image.data.stream, form.image.data.content_type)
-                logger.info(f"Preparando para enviar nova imagem: {form.image.data.filename}")
+                # Processar o nome do arquivo com UUID, underscores e minúsculas
+                original_filename = form.image.data.filename
+                safe_filename = secure_filename(original_filename)
+                filename_with_underscores = safe_filename.replace(' ', '_') # Trocar espaço por underscore
+                lowercase_filename = filename_with_underscores.lower() # Converter para minúsculas
+                final_filename = f"{uuid.uuid4()}_{lowercase_filename}" # Adicionar UUID
+
+                # Usar o nome final no envio
+                files['image'] = (final_filename, form.image.data.stream, form.image.data.content_type)
+                logger.info(f"Preparando para enviar nova imagem: {final_filename}")
             else:
                  logger.info("Nenhuma nova imagem enviada para atualização.")
                  # Se não há imagem nova, garantir que image_url (se existir no form) seja enviado
