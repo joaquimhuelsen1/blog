@@ -511,12 +511,12 @@ def edit_post(post_id):
                 return render_template('admin/edit_post.html', form=form, post_id=post_id)
         
         except requests.RequestException as e:
-             logger.error(f"Erro de rede ao ATUALIZAR post via webhook: {e}")
-             flash('Erro de rede ao salvar alterações.', 'danger')
+            logger.error(f"Erro de rede ao ATUALIZAR post via webhook: {e}")
+            flash('Erro de rede ao salvar alterações.', 'danger')
         except Exception as e:
-             logger.error(f"Erro inesperado ao ATUALIZAR post: {e}")
-             logger.error(traceback.format_exc()) # Log completo para erros inesperados
-             flash('Erro inesperado ao salvar alterações.', 'danger')
+            logger.error(f"Erro inesperado ao ATUALIZAR post: {e}")
+            logger.error(traceback.format_exc()) # Log completo para erros inesperados
+            flash('Erro inesperado ao salvar alterações.', 'danger')
         # Se validate_on_submit falhou ou ocorreu erro, renderiza o form novamente
         return render_template('admin/edit_post.html', form=form, post_id=post_id)
     # --- FIM DO PROCESSAMENTO DO POST --- 

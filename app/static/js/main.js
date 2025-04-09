@@ -149,6 +149,12 @@ function setupFlashMessages() {
     const flashMessages = document.querySelectorAll('.alert');
     
     flashMessages.forEach(message => {
+        // --- Check if the message should be auto-hidden --- 
+        if (message.classList.contains('js-no-autohide')) {
+            return; // Skip this message if it has the specific class
+        }
+        // --- End Check --- 
+        
         setTimeout(() => {
             message.style.transition = 'opacity 1s ease-out';
             message.style.opacity = '0';

@@ -96,7 +96,7 @@
                     
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and request.endpoint == 'ai_chat.ia_relacionamento' %}active{% endif %}" href="{{ url_for('ai_chat.ia_relacionamento') }}">
+                        <a class="nav-link {% if request.endpoint and request.endpoint == 'ai_chat.ia_relacionamento' %}active{% endif %}" href="/ai-chat/ia-relacionamento">
                             <i class="fas fa-robot"></i> Relationship AI
                         </a>
                     </li>

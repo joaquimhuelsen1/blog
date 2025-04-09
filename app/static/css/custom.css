@@ -895,4 +895,404 @@ footer .social-links a {
 .reconquest-banner-button {
     /* Estilo para o botão, se precisar sobrescrever o padrão do Bootstrap */
     /* Exemplo: background-color: #a50000; border-color: #a50000; */
-} 
+}
+
+.reconquest-banner-button:hover {
+    background-color: #a50000;
+    transform: translateY(-2px);
+}
+
+/* === STYLES MOVED FROM post.html === */
+
+/* Ensure icons and badges load immediately (already covered mostly, but explicit) */
+.post-content .fas, .post-content .fab, .post-content .far, .post-content .fa, .post-content .badge {
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: inline-block !important;
+}
+
+.post-header {
+    position: relative;
+    width: 100%;
+    height: 500px;
+    overflow: visible;
+    margin-bottom: 2rem;
+    z-index: 1;
+}
+
+.post-header img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.post-title-container {
+    position: absolute;
+    bottom: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    padding: 2rem;
+    width: 90%;
+    max-width: 1000px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border-radius: 15px;
+    z-index: 20;
+}
+
+.post-title {
+    text-align: center;
+    margin: 0 0 1rem 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-color); /* Ensure --primary-color is defined or replace with #C60000 */
+    line-height: 1.2;
+}
+
+.post-meta-header {
+    text-align: center;
+    color: #6c757d;
+    font-size: 1rem;
+    margin: 1rem 0 0 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.post-meta-header i {
+    margin-right: 0.5rem;
+    color: var(--primary-color); /* Ensure --primary-color is defined or replace with #C60000 */
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.post-meta-header span {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.premium-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+}
+
+.premium-lock {
+    font-size: 5rem;
+    color: #ffc107;
+    animation: pulse 2s infinite;
+}
+
+.premium-content-preview {
+    position: relative;
+    padding-bottom: 2rem;
+    overflow: hidden;
+}
+
+.premium-content-blur {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70%;
+    background: linear-gradient(transparent, #fff);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding-bottom: 2rem;
+}
+
+.premium-cta {
+    /* This class seems unused now, but kept for potential future use */
+    background-color: rgba(255, 193, 7, 0.9);
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-width: 80%;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* .post-meta styles seem duplicated, check if needed */
+/* .post-meta { ... } */
+
+.post-content {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto;
+    line-height: 1.8;
+    font-size: 1.1rem;
+    color: #000;
+    z-index: 1;
+}
+
+.post-content h1, .post-content h2 {
+    color: var(--primary-color) !important; /* Ensure --primary-color is defined or replace with #C60000 */
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+.post-content h3, .post-content h4, .post-content h5, .post-content h6 {
+    color: #343a40;
+    font-weight: 600;
+    margin-top: 1.5rem;
+}
+
+.post-content p {
+    margin-bottom: 1.5rem;
+    color: #000;
+}
+
+.post-content a {
+    color: #007bff; /* Consider using var(--primary-color) or #C60000 */
+    text-decoration: underline;
+}
+
+.post-content img {
+    max-width: 100%;
+    height: auto;
+    margin: 1.5rem 0;
+    border-radius: 4px;
+}
+
+.premium-badge {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: #ffc107;
+    color: #000;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: 600;
+    z-index: 2;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+/* Recent Posts Styles */
+.recent-posts {
+    margin-top: 5rem;
+    padding-top: 3rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.recent-posts h3 {
+    text-align: center;
+    margin-bottom: 2rem;
+    font-weight: 600;
+}
+
+.recent-post-card {
+    height: 100%;
+    transition: transform 0.3s;
+}
+
+.recent-post-card:hover {
+    transform: translateY(-5px);
+}
+
+.recent-post-image {
+    height: 250px;
+    object-fit: cover;
+}
+
+.recent-post-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+}
+
+.reading-time {
+    color: #6c757d;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    background-color: #f8f9fa;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+}
+
+.reading-time i {
+    color: #ffc107;
+    margin-right: 0.25rem;
+}
+
+/* Estilos para elementos Markdown */
+.post-content blockquote {
+    border-left: 4px solid #ff0000; /* Consider using var(--primary-color) or #C60000 */
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background-color: #f8f9fa;
+    color: #ff0000; /* Consider using var(--primary-color) or #C60000 */
+    font-style: italic;
+}
+
+.post-content ul, .post-content ol {
+    margin: 1.5rem 0;
+    padding-left: 2rem;
+}
+
+.post-content li {
+    margin-bottom: 0.5rem;
+}
+
+.post-content li::marker {
+    color: #ff0000; /* Consider using var(--primary-color) or #C60000 */
+}
+
+.post-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-family: monospace;
+    color: #000;
+}
+
+.post-content pre {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+}
+
+.post-content pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.post-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+}
+
+.post-content th, .post-content td {
+    border: 1px solid #dee2e6;
+    padding: 0.75rem;
+    text-align: left;
+    color: #000;
+}
+
+.post-content th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.post-content-wrapper {
+    position: relative;
+    z-index: 1;
+    margin-top: 80px;
+}
+
+/* Styles for preview overlay and CTA (moved from inline) */
+.preview-content-container {
+    position: relative;
+}
+
+.fade-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1) 80%);
+    z-index: 5;
+    pointer-events: none;
+}
+
+.premium-preview-cta {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to bottom, rgba(255, 193, 7, 0.9) 0%, #ffc107 100%); 
+    z-index: 10;
+    /* padding, border, color, text-align etc. already applied by existing classes */
+}
+
+.premium-preview-cta .btn {
+    background-color: #C60100;
+    border-color: #C60100;
+    text-decoration: none;
+    /* color: white is inherited or applied by .text-white */
+}
+
+/* Media Queries from post.html <style> block */
+@media (max-width: 768px) {
+    .post-title {
+        font-size: 2.2rem;
+        margin: 0 0 0.8rem 0;
+    }
+    
+    .post-title-container {
+        width: 95%;
+        padding: 1.5rem;
+    }
+    
+    .post-meta-header {
+        font-size: 0.9rem;
+        gap: 1rem;
+    }
+    
+    /* Duplicated from base custom.css, check if overrides are needed */
+    /* .card-body { ... } */
+    /* .coaching-title { ... } */
+    /* .coaching-text { ... } */
+    /* .d-flex { ... } */ 
+    /* .coaching-btn { ... } */
+}
+
+@media (max-width: 480px) {
+    .post-title {
+        font-size: 1.8rem;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .post-title-container {
+        padding: 1.2rem;
+    }
+    
+    .post-meta-header {
+        font-size: 0.8rem;
+        gap: 0.8rem;
+    }
+}
+
+/* Duplicated from base custom.css, check if overrides are needed */
+/* .recent-post-meta { ... } */
+/* .recent-post-meta i { ... } */
+/* .card { ... } */
+/* .card-body { ... } */
+/* .coaching-title { ... } */
+/* .coaching-text { ... } */
+/* .coaching-btn { ... } */
+/* .coaching-btn:hover { ... } */
+
+/* === END STYLES MOVED FROM post.html === */ 

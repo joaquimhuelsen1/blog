@@ -191,54 +191,6 @@ def create_app():
         except:
             pass  # Ignorar erros durante o rollback
     
-    # Handler para requisições AJAX retornarem JSON em caso de erro
-    @app.errorhandler(Exception)
-    def handle_exception(e):
-        logger.error(f"❌ ERRO NA APLICAÇÃO: {str(e)}")
-        logger.exception("Detalhes completos do erro:")
-        
-        # Verificar se a requisição é AJAX
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            logger.error(f"Erro na requisição AJAX: {str(e)}")
-            # Se for AJAX, retornar erro como JSON
-            response = jsonify({
-                'success': False,
-                'error': str(e)
-            })
-            response.headers['Content-Type'] = 'application/json'
-            return response, 500
-        
-        # Criar uma resposta HTML simplificada para evitar erros cíclicos
-        # em caso de falha na renderização do template
-        try:
-            return render_template('errors/500.html', error=str(e)), 500
-        except Exception as template_error:
-            logger.error(f"❌ ERRO AO RENDERIZAR TEMPLATE DE ERRO: {str(template_error)}")
-            # Criar resposta de emergência como último recurso
-            html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Internal Server Error - Reconquest Blog</title>
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
-                    .error-container { max-width: 800px; margin: 40px auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px; }
-                    h2 { color: #C60000; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-                </style>
-            </head>
-            <body>
-                <div class="error-container">
-                    <h2>Internal Server Error</h2>
-                    <p>An unexpected error occurred. Our team has been notified.</p>
-                    <a href="/">Return to home page</a>
-                </div>
-            </body>
-            </html>
-            """
-            return html, 500
-    
     # Registrar blueprints individualmente com imports diretos
     registered_count = 0
     
@@ -287,6 +239,52 @@ def create_app():
     else:
          logger.info(f"Total de {registered_count} blueprints registrados.")
     
+    # Adicionar variável now para os templates e token CSRF
+    @app.context_processor
+    def inject_template_globals():
+        from flask_wtf.csrf import generate_csrf
+        return {
+            'now': datetime.utcnow(),
+            'csrf_token': generate_csrf()
+        }
+    
+    # ==> START MOVED ERROR HANDLERS <==
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        logger.error(f"❌ ERRO NA APLICAÇÃO: {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+        
+        # Criar uma resposta HTML simplificada para evitar erros cíclicos
+        # em caso de falha na renderização do template
+        try:
+            return render_template('errors/500.html', error=str(e)), 500
+        except Exception as template_error:
+            logger.error(f"❌ ERRO AO RENDERIZAR TEMPLATE DE ERRO: {str(template_error)}")
+            # Criar resposta de emergência como último recurso
+            html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Internal Server Error - Reconquest Blog</title>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; color: #333; }
+                    .error-container { max-width: 800px; margin: 40px auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px; }
+                    h2 { color: #C60000; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="error-container">
+                    <h2>Internal Server Error</h2>
+                    <p>An unexpected error occurred. Our team has been notified.</p>
+                    <a href="/">Return to home page</a>
+                </div>
+            </body>
+            </html>
+            """
+            return html, 500
+
     # Handler específico para erros de CSRF
     @app.errorhandler(CSRFError)
     def handle_csrf_error(e):
@@ -322,16 +320,8 @@ def create_app():
     def internal_server_error(e):
         logger.error(f"Erro interno do servidor: {str(e)}")
         return render_template('errors/500.html', error=str(e)), 500
-    
-    # Adicionar variável now para os templates e token CSRF
-    @app.context_processor
-    def inject_template_globals():
-        from flask_wtf.csrf import generate_csrf
-        return {
-            'now': datetime.utcnow(),
-            'csrf_token': generate_csrf()
-        }
-    
+    # ==> END MOVED ERROR HANDLERS <==
+
     logger.info("==== APLICAÇÃO FLASK INICIALIZADA COM SUCESSO ====")
     return app
 

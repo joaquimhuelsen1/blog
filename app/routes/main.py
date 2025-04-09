@@ -10,6 +10,7 @@ import logging  # Adicionar para logs
 from datetime import datetime
 from dotenv import load_dotenv
 from types import SimpleNamespace
+import re # <--- Add import
 
 # Configurar logs
 logging.basicConfig(
@@ -191,6 +192,56 @@ def post(post_id):
         else:
             post_obj.author = SimpleNamespace(username='Desconhecido')
 
+        # === LÓGICA PARA PREVIEW DE POST PREMIUM ===
+        is_preview = False
+        display_content = getattr(post_obj, 'content', '') # Usar getattr para segurança
+
+        if getattr(post_obj, 'premium_only', False) and not current_user.is_premium:
+            logger.info(f"Usuário não premium acessando post premium ID: {post_id_str}. Gerando preview.")
+            full_content = display_content
+            
+            # 1. Get plain text version (remove HTML tags)
+            plain_text = re.sub('<[^>]*>', '', full_content) # Simple HTML strip
+            plain_len = len(plain_text)
+
+            if plain_len > 0: # Avoid division by zero if content is only HTML
+                # 2. Calculate midpoint of plain text
+                target_plain_chars = plain_len // 2
+                
+                # 3. Estimate the cutoff point in the original string based on plain text ratio
+                estimated_cutoff = int((target_plain_chars / plain_len) * len(full_content))
+
+                # 4. Refine the cutoff point: find nearest space/newline before the estimated point
+                preview_cutoff = estimated_cutoff
+                # Look for space within a reasonable range before the estimate
+                space_index = full_content.rfind(' ', max(0, estimated_cutoff - 100), estimated_cutoff)
+                if space_index != -1:
+                    preview_cutoff = space_index
+                else:
+                    # If no space, look for newline
+                    newline_index = full_content.rfind('\n', max(0, estimated_cutoff - 200), estimated_cutoff)
+                    if newline_index != -1:
+                        preview_cutoff = newline_index
+                
+                # Ensure cutoff doesn't exceed original length (edge case)
+                preview_cutoff = min(preview_cutoff, len(full_content))
+
+                # Slice the original content
+                display_content = full_content[:preview_cutoff] + "..."
+                is_preview = True
+            else:
+                # If plain_len is 0, maybe it's just an image? Show a generic preview message or keep original?
+                # For now, let's just show a small part of the original html or a message
+                # If full_content has length, show first N chars, otherwise it's truly empty
+                if len(full_content) > 0:
+                    display_content = full_content[:100] + "..." # Fallback for content with only HTML/scripts
+                    is_preview = True # Still treat as preview
+                else:
+                    # If full_content is also empty, no preview needed
+                    is_preview = False 
+                    
+        # === FIM DA LÓGICA DE PREVIEW ===
+
         # --- PASSO 2: Buscar Comentários (Usando Webhook) --- 
         comments_data = []
         comment_webhook_url = os.environ.get('WEBHOOK_COMMENT_POST') # Usar o mesmo webhook
@@ -294,10 +345,12 @@ def post(post_id):
         
         return render_template('public/post.html', 
                                post=post_obj, 
-                               recent_posts=recent_posts_data,
+                               display_content=display_content,
+                               is_preview=is_preview,
+                             recent_posts=recent_posts_data, 
                                form=form, # Passar o formulário
                                comments=comments_data) # Passar os comentários obtidos
-
+                             
     except requests.RequestException as e:
         logger.error(f"Erro de requisição (principal ou recente) no post {post_id_str}: {str(e)}")
         # Diferenciar o erro talvez? Por enquanto, erro genérico.
@@ -310,6 +363,12 @@ def post(post_id):
 @main_bp.route('/post/<uuid:post_id>/comment', methods=['POST'])
 @login_required # Garantir que só usuários logados comentem
 def add_comment(post_id):
+    # --- Add Premium Check --- 
+    if not current_user.is_premium:
+        logger.warning(f"Tentativa de comentário bloqueada: Usuário {current_user.id} não é premium.")
+        return jsonify({'success': False, 'message': 'Commenting is a premium feature. Please upgrade your account.'}), 403 # Forbidden
+    # --- End Premium Check --- 
+    
     form = CommentForm()
     
     if form.validate_on_submit():
