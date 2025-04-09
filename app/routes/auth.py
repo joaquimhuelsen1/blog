@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_user, logout_user, login_required, current_user
 # from app import db # REMOVIDO
 from app.models import User
-from app.forms import LoginForm, RegistrationForm, VerifyOtpForm, ProfileUpdateForm, PasswordChangeForm
+from app.forms import LoginForm, RegistrationForm, VerifyOtpForm, ProfileUpdateForm, PasswordChangeForm, VerifyLoginForm
 from urllib.parse import urlsplit, urlparse, urljoin
 import logging
 import traceback
@@ -46,222 +46,214 @@ def is_safe_url(target):
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    try:
-        logger.info("==== INICIANDO PROCESSO DE LOGIN ====")
+    # Redirect if already logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
+    # Determine if we are in the OTP verification stage
+    email_for_otp = session.get('email_for_login_otp')
+    otp_sent = bool(email_for_otp)
+
+    # Initialize forms
+    login_form = LoginForm() if not otp_sent else None
+    otp_form = VerifyLoginForm() if otp_sent else None
+
+    # --- Handle POST requests (both email submission and OTP verification) --- 
+    if request.method == 'POST':
         
-        if current_user.is_authenticated:
-            logger.info(f"Usuário já autenticado ({current_user.username}), redirecionando...")
-            return redirect(url_for('main.index'))
+        # Determine which form was submitted based on otp_sent status from session
+        current_otp_sent = bool(session.get('email_for_login_otp'))
         
-        # Verificar se há um token de recuperação no hash
-        if request.url and '#' in request.url:
-            hash_part = request.url.split('#')[1]
-            if hash_part:
-                params = dict(param.split('=') for param in hash_part.split('&'))
-                if params.get('type') == 'recovery' and params.get('access_token'):
-                    logger.info("Token de recuperação encontrado, redirecionando para reset-password")
-                    return redirect(url_for('auth.reset_password', _external=True) + '#' + hash_part)
-        
-        form = LoginForm()
-        
-        if form.validate_on_submit():
-            logger.info(f"Tentativa de login: {form.email.data}")
-            
-            try:
-                # Enviar dados para o webhook de login
-                webhook_url = os.environ.get('WEBHOOK_LOGIN')
-                logger.info(f"WEBHOOK_LOGIN: {webhook_url}")
-                
+        if not current_otp_sent:
+            # --- STAGE 1: Process Email Submission --- 
+            submitted_login_form = LoginForm(request.form)
+            logger.info(f"Received POST form data (Stage 1): {request.form.to_dict()}")
+            if submitted_login_form.validate_on_submit():
+                email = submitted_login_form.email.data
+                # webhook_url = os.environ.get('WEBHOOK_LOGIN') # OLD: Webhook to request OTP
+                webhook_url = os.environ.get('WEBHOOK_RESENDOTP') # NEW: Use RESENDOTP webhook
                 if not webhook_url:
-                    logger.error("WEBHOOK_LOGIN não configurado")
-                    flash('Error in configuration. Please try again later.', 'danger')
-                    return render_template('auth/login.html', form=form)
+                    # logger.error("WEBHOOK_LOGIN (for OTP request) not configured") # OLD LOG
+                    logger.error("WEBHOOK_RESENDOTP (for initial login OTP request) not configured")
+                    flash('Server configuration error. Cannot send login code.', 'danger')
+                    return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
                 
-                # Preparar dados para o webhook
-                data = {
-                    'email': form.email.data,
-                    'password': form.password.data,
-                    'event': 'login'
-                }
-
-                headers = {
-                    'Content-Type': 'application/json'
-                }
-
-                logger.info(f"Enviando requisição para webhook: {webhook_url}")
-                logger.info(f"Dados: {data}")
-
-                response = requests.post(
-                    webhook_url,
-                    json=data,
-                    headers=headers,
-                    timeout=10
-                )
-                
-                logger.info(f"Status: {response.status_code}")
-                logger.info(f"Resposta: {response.text}")
-
-                if response.status_code == 200:
+                try:
+                    # payload = {'email': email, 'event': 'request_login_otp'} # OLD PAYLOAD
+                    payload = {'email': email, 'event': 'request_otp'} # NEW PAYLOAD (consistent with resend)
+                    logger.info(f"Requesting initial login OTP for {email} via {webhook_url}") # UPDATED LOG MESSAGE
+                    response = requests.post(webhook_url, json=payload, timeout=10)
+                    response.raise_for_status()
                     response_data = response.json()
                     
-                    # Verificar status de erro
-                    if response_data.get('status') == 'false':
-                        logger.warning(f"Login falhou para email: {form.email.data}")
-                        flash('Invalid email or password.', 'danger')
-                        return render_template('auth/login.html', form=form)
-                    
-                    # Se o status for success, tentar obter dados do usuário
-                    elif response_data.get('status') == 'success':
-                        try:
-                            # Log de todos os headers para debug
-                            logger.info("Headers da resposta do webhook:")
-                            for header_name, header_value in response.headers.items():
-                                logger.info(f"  {header_name}: {header_value}")
-                            
-                            # Extrair dados do cabeçalho - use a forma correta para acessar os headers
-                            # Os headers estão vindo com nomes não padronizados, então vamos verificar de forma case-insensitive
-                            headers_dict = {k.lower(): v for k, v in response.headers.items()}
-                            
-                            # Obter dados usando nomes case-insensitive
-                            user_id = headers_dict.get('id') or headers_dict.get('x-user-id')
-                            username = headers_dict.get('username') or headers_dict.get('x-user-username')
-                            email = headers_dict.get('email') or headers_dict.get('x-user-email', form.email.data)
-                            is_admin_str = headers_dict.get('is_admin') or headers_dict.get('x-user-isadmin', 'false')
-                            is_premium_str = headers_dict.get('is_premium') or headers_dict.get('x-user-ispremium', 'false')
-                            age_str = headers_dict.get('age') or headers_dict.get('x-user-age')
-                            ai_credits_str = headers_dict.get('ai_credits') or headers_dict.get('x-user-aicredits', '0')
-                            
-                            # Converter strings para tipos apropriados
-                            is_admin = is_admin_str.lower() == 'true'
-                            is_premium = is_premium_str.lower() == 'true'
-                            age = int(age_str) if age_str and age_str.isdigit() else None
-                            ai_credits = int(ai_credits_str) if ai_credits_str and ai_credits_str.isdigit() else 0
-                            
-                            # Log dos dados extraídos dos headers
-                            logger.info(f"Dados extraídos dos headers:")
-                            logger.info(f"  ID: {user_id}")
-                            logger.info(f"  Username: {username}")
-                            logger.info(f"  Email: {email}")
-                            logger.info(f"  Is Admin: {is_admin}")
-                            logger.info(f"  Is Premium: {is_premium}")
-                            logger.info(f"  Age: {age}")
-                            logger.info(f"  AI Credits: {ai_credits}")
-                            
-                            # Log do corpo da resposta
-                            logger.info(f"Corpo da resposta: {response_data}")
-                            
-                            # Se não encontrou dados essenciais nos headers, tenta do corpo
-                            if not user_id or not username:
-                                logger.warning("Dados não encontrados nos headers, tentando obter do corpo")
-                                
-                                # Verificar se há campo 'user' no corpo
-                                if isinstance(response_data, dict) and 'user' in response_data:
-                                    user_data = response_data['user']
-                                else:
-                                    user_data = response_data
-                                
-                                # Obter dados do corpo
-                                user_id = user_id or user_data.get('id')
-                                username = username or user_data.get('username')
-                                email = email or user_data.get('email', form.email.data)
-                                
-                                # Obter os demais dados do corpo
-                                if is_admin is None:
-                                    is_admin = user_data.get('is_admin', False)
-                                if is_premium is None:
-                                    is_premium = user_data.get('is_premium', False)
-                                if not age:
-                                    age = user_data.get('age')
-                                if ai_credits is None:
-                                    ai_credits = user_data.get('ai_credits', 0)
-                            
-                            # Verificação final: se ainda não temos ID, usar email como base
-                            if not user_id:
-                                logger.warning("ID não encontrado, usando hash do email")
-                                user_id = hashlib.md5(email.encode()).hexdigest()
-                            
-                            # Se ainda não temos username, usar parte do email
-                            if not username:
-                                logger.warning("Username não encontrado, usando parte do email")
-                                username = email.split('@')[0]
-                            
-                            logger.info(f"Dados finais: ID={user_id}, Username={username}, Email={email}")
-                            
-                            # Criar objeto User com os dados recebidos
-                            user = User(
-                                id=user_id,
-                                username=username,
-                                email=email,
-                                is_admin=is_admin,
-                                is_premium=is_premium,
-                                age=age,
-                                ai_credits=ai_credits
-                            )
-                            
-                            # Fazer login do usuário
-                            login_user(user, remember=form.remember_me.data)
-                            logger.info(f"Login bem-sucedido para: {user.email} (ID: {user.id})")
-                            
-                            # Armazenar dados do usuário na sessão em detalhes
-                            session['user_data'] = {
-                                'id': str(user.id),
-                                'username': user.username,
-                                'email': user.email,
-                                'is_admin': user.is_admin,
-                                'is_premium': user.is_premium,
-                                'age': user.age,
-                                'ai_credits': user.ai_credits,
-                                # Armazenar headers originais para referência e debug
-                                'auth_headers': dict(headers_dict)
-                            }
-                            
-                            # Log dos dados salvos na sessão
-                            logger.info(f"Dados salvos na sessão: {session['user_data']}")
-                            
-                            # --- REDIRECT LOGIC ---
-                            # Prioritize 'next' from URL parameter, then from session
-                            next_page = request.args.get('next')
-                            if not next_page or not is_safe_url(next_page):
-                                next_page = session.pop('next_url', None) # Check session if URL param invalid/missing
-                                if not next_page or not is_safe_url(next_page):
-                                    next_page = url_for('main.index') # Default
-
-                            logger.info(f"Login successful, redirecting to: {next_page}")
-                            return redirect(next_page)
-                            # ----------------------
-
-                        except Exception as header_error:
-                            logger.error(f"Erro ao processar dados do usuário: {str(header_error)}")
-                            logger.error(traceback.format_exc())
-                            flash('Error processing your login information. Please try again.', 'danger')
-                            return render_template('auth/login.html', form=form)
+                    # --- ADJUSTED RESPONSE CHECK FOR STAGE 1 --- 
+                    is_success = False
+                    # Case 1: Response is like [{'status': 'success'}]
+                    if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict) and response_data[0].get('status') == 'success':
+                        is_success = True
+                    # Case 2: Response is like {'success': True} OR {'status': 'success'}
+                    elif isinstance(response_data, dict) and (response_data.get('success') or response_data.get('status') == 'success'):
+                         is_success = True
+                         
+                    if is_success:
+                    # if isinstance(response_data, dict) and response_data.get('success'): # OLD CHECK
+                        logger.info(f"Login OTP sent successfully to {email}")
+                        session['email_for_login_otp'] = email
+                        session.modified = True
+                        flash('A login code has been sent to your email.', 'info')
+                        # Re-render the same page, now showing OTP form (Instantiate OTP form for rendering)
+                        new_otp_form = VerifyLoginForm()
+                        return render_template('auth/login.html', otp_form=new_otp_form, otp_sent=True, email=email)
                     else:
-                        # Formato desconhecido
-                        logger.error(f"Formato de resposta desconhecido: {response_data}")
-                        flash('Error processing your login. Please try again.', 'danger')
-                        return render_template('auth/login.html', form=form)
-                else:
-                    logger.error(f"Erro do webhook: {response.status_code} - {response.text}")
-                    flash('Error processing your login. Please try again.', 'danger')
+                        # Try to get a message if it's a dict, otherwise use a default
+                        error_message = 'Failed to send login code.'
+                        if isinstance(response_data, dict):
+                            error_message = response_data.get('message', error_message)
+                        elif isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                             error_message = response_data[0].get('message', error_message)
+                             
+                        # error_msg = response_data.get('message', 'Could not send login code. Is the email registered?') if isinstance(response_data, dict) else 'Failed to send login code.' # OLD ERROR MSG
+                        logger.warning(f"Failed to send login OTP for {email}: Response={response_data}") # Log the actual response
+                        flash(error_message, 'danger')
+                
+                except requests.RequestException as e:
+                    logger.error(f"Network error requesting login OTP: {e}")
+                    flash('Network error. Could not send login code.', 'danger')
+                except Exception as e:
+                    logger.error(f"Unexpected error requesting login OTP: {e}")
+                    flash('An unexpected error occurred.', 'danger')
+                
+                # Fallthrough: re-render email form on failure
+                return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
+            else:
+                # Form validation failed for email form
+                 logger.warning(f"Login form (Stage 1) validation failed: {submitted_login_form.errors}")
+                 return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
+
+        else: # current_otp_sent is True
+            # --- STAGE 2: Process OTP Verification --- 
+            submitted_otp_form = VerifyLoginForm(request.form)
+            if submitted_otp_form.validate_on_submit():
+                otp_code = submitted_otp_form.otp.data
+                email = session.get('email_for_login_otp') # Get email from session
+                
+                if not email:
+                     flash('Session expired. Please enter your email again.', 'warning')
+                     session.pop('email_for_login_otp', None)
+                     return redirect(url_for('auth.login'))
+                     
+                webhook_url = os.environ.get('WEBHOOK_AUTHENTICATE_OTP') # USE THIS WEBHOOK FOR VERIFICATION
+                if not webhook_url:
+                    logger.error("WEBHOOK_AUTHENTICATE_OTP not configured")
+                    flash('Server configuration error. Cannot verify login code.', 'danger')
+                    # Pass the submitted form back on error
+                    return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+
+                try:
+                    payload = {'email': email, 'otp': otp_code, 'event': 'verify_login_otp'}
+                    logger.info(f"Verifying login OTP for {email}")
+                    response = requests.post(webhook_url, json=payload, timeout=10)
+                    response.raise_for_status()
+                    response_data = response.json()
                     
-            except Exception as e:
-                logger.error(f"Erro durante login: {str(e)}")
-                logger.error(traceback.format_exc())
-                flash('An error occurred during login. Please try again.', 'danger')
-        
-        # GET request or failed POST validation
-        # --- PASS NEXT URL TO TEMPLATE (Optional but good practice) ---
-        # Store next_url from parameter in session if user needs to register instead
-        next_url_param = request.args.get('next')
-        if next_url_param and is_safe_url(next_url_param):
-            session['next_url'] = next_url_param
-        # -------------------------------------------------------------
-        return render_template('auth/login.html', form=form)
-    except Exception as e:
-        logger.error(f"Erro no login: {str(e)}")
-        logger.error(traceback.format_exc())
-        flash('An error occurred during login. Please try again.', 'danger')
-        return redirect(url_for('auth.login'))
+                    # --- ADJUSTED RESPONSE HANDLING (v2) --- 
+                    user_info = None
+                    # Case 1: Response is a list containing a user dictionary
+                    if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                        user_info = response_data[0] 
+                        logger.info(f"Webhook returned user data (list format) successfully for login: {email}")
+                    # Case 2: Response is a direct user dictionary (check for presence of 'id')
+                    elif isinstance(response_data, dict):
+                        # --- ADD EXTRA LOGGING --- 
+                        retrieved_id = response_data.get('id')
+                        logger.info(f"Checking dict response: found 'id'? Type={type(retrieved_id)}, Value='{retrieved_id}'")
+                        # --- END EXTRA LOGGING --- 
+                        if retrieved_id: # Check if the retrieved ID is truthy
+                            user_info = response_data
+                            logger.info(f"Webhook returned user data (dict format) successfully for login: {email}")
+                    
+                    # Check if we got the user info dictionary from either case
+                    if user_info:
+                        # --- Extract User data from the dictionary (user_info) --- 
+                        user_id = user_info.get('id')
+                        user_email = user_info.get('email', email)
+                        user_username = user_info.get('username')
+                        # Convert string booleans/numbers
+                        user_is_admin_str = str(user_info.get('is_admin', 'false')).lower()
+                        user_is_admin = user_is_admin_str == 'true'
+                        user_is_premium_str = str(user_info.get('is_premium', 'false')).lower()
+                        user_is_premium = user_is_premium_str == 'true'
+                        user_age = user_info.get('age')
+                        try:
+                            user_ai_credits = int(user_info.get('ai_credits', 0))
+                        except (ValueError, TypeError):
+                            user_ai_credits = 0
+                        auth_id = user_info.get('auth-id') # Key might be 'auth-id'
+                        access_token = user_info.get('access_token')
+                        refresh_token = user_info.get('refresh_token')
+                        
+                        if not user_id:
+                             logger.error(f"Webhook success but missing user ID for {email}")
+                             flash('Login failed: Invalid user data received.', 'danger')
+                             return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+                             
+                        flask_user = User(
+                            id=user_id, 
+                            email=user_email,
+                            username=user_username,
+                            is_admin=user_is_admin,
+                            is_premium=user_is_premium,
+                            age=user_age,
+                            ai_credits=user_ai_credits
+                        )
+                        login_user(flask_user, remember=True) 
+                        logger.info(f"OTP Login successful for {email}")
+                        session.pop('email_for_login_otp', None)
+                        
+                        # Store user data in session (optional but can be useful)
+                        session['user_data'] = {
+                             'id': str(flask_user.id),
+                             'username': flask_user.username,
+                             'email': flask_user.email,
+                             'is_admin': flask_user.is_admin,
+                             'is_premium': flask_user.is_premium,
+                             'age': flask_user.age,
+                             'ai_credits': flask_user.ai_credits,
+                             'auth_id': auth_id
+                        }
+                        session.modified = True
+                        
+                        # Redirect
+                        next_page = session.pop('next_url', None)
+                        if not next_page or not is_safe_url(next_page):
+                            next_page = url_for('main.index')
+                        return redirect(next_page)
+                    else:
+                        logger.warning(f"Failed OTP verification for {email}. Webhook response did not contain expected user data. Response: {response_data}")
+                        flash('Invalid login code or verification failed.', 'danger')
+                        # Re-render OTP form with errors
+                        return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+                
+                except requests.RequestException as e:
+                    logger.error(f"Network error verifying login OTP: {e}")
+                    flash('Network error. Could not verify login code.', 'danger')
+                    return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+                except Exception as e:
+                    logger.error(f"Unexpected error verifying login OTP: {e}")
+                    flash('An unexpected error occurred.', 'danger')
+                    return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+            else:
+                # Form validation failed for OTP form
+                logger.warning(f"OTP form (Stage 2) validation failed: {submitted_otp_form.errors}")
+                return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=session.get('email_for_login_otp')) # Pass email back
+
+    # --- Handle GET requests --- 
+    if otp_sent:
+        # If GET request but OTP was already sent (e.g., page refresh), show OTP form again
+        return render_template('auth/login.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
+    else:
+        # Standard GET request, show email form
+        return render_template('auth/login.html', login_form=login_form, otp_sent=False)
 
 @auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
@@ -280,215 +272,242 @@ def logout():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
-        
-    form = RegistrationForm() # Agora só tem email
-    if form.validate_on_submit():
-        email = form.email.data
-        
-        webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
-        if not webhook_url:
-            logger.error("WEBHOOK_REGISTRATION não configurado no .env")
-            flash('Erro de configuração do servidor.', 'danger')
-            return render_template('auth/register.html', title='Registrar', form=form)
 
-        try:
-            logger.info(f"Enviando solicitação de OTP para webhook: {webhook_url} para email: {email}")
-            payload = {
-                'email': email,
-                'event': 'request_otp' # Somente email agora
-            }
-            response = requests.post(webhook_url, json=payload, timeout=15)
+    # Determine stage: email entry or OTP verification?
+    email_for_otp = session.get('email_for_registration_otp')
+    otp_sent = bool(email_for_otp)
+
+    # Initialize forms based on stage
+    registration_form = RegistrationForm() if not otp_sent else None
+    otp_form = VerifyOtpForm() if otp_sent else None # This form has OTP and Username
+
+    # --- Handle POST requests --- 
+    if request.method == 'POST':
+        
+        # --- STAGE 1: Email Submission --- 
+        if registration_form and registration_form.validate_on_submit():
+            email = registration_form.email.data
+            webhook_url = os.environ.get('WEBHOOK_REGISTRATION') # Webhook to request OTP
+            if not webhook_url:
+                logger.error("WEBHOOK_REGISTRATION (for OTP request) not configured")
+                flash('Server configuration error. Cannot send verification code.', 'danger')
+                return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
             
-            # Verificar se o webhook aceitou (pode retornar erro no JSON mesmo com 200)
-            try: 
-                response_data = response.json()
-                logger.info(f"Resposta JSON do WEBHOOK_REGISTRATION: {response_data}")
-                status = None
-                if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
-                     status = response_data[0].get('status')
-                elif isinstance(response_data, dict):
-                     status = response_data.get('status')
+            try:
+                payload = {'email': email, 'event': 'request_otp'}
+                logger.info(f"Requesting registration OTP for {email} via {webhook_url}")
+                response = requests.post(webhook_url, json=payload, timeout=15)
                 
-                # Sucesso implica que o OTP PODE ser enviado (webhook aceitou)
-                if response.status_code < 300 and (status == 'success' or status is None): # Aceitar 2xx e status success ou ausente
-                    logger.info(f"Webhook aceitou solicitação de OTP para {email}.")
-                    session['otp_email_for_registration'] = email # Usar chave diferente da recuperação
-                    flash('We sent a verification code to your email.', 'info')
-                    session.modified = True # Force session save before redirect
-                    return redirect(url_for('auth.verify_registration_otp'))
-                else:
-                     # Erro lógico retornado pelo webhook (ex: email inválido, rate limit, já registrado?)
-                     error_message = response_data.get('message', 'Não foi possível iniciar o registro para este e-mail.')
-                     logger.warning(f"Webhook negou solicitação para {email}: Status={status}, Msg={error_message}")
-                     flash(error_message, 'danger')
-                     
-            except ValueError: # Não retornou JSON válido
-                 logger.error(f"Webhook (REGISTRATION) não retornou JSON válido. Status: {response.status_code}, Resposta: {response.text}")
-                 if response.status_code >= 400:
-                      response.raise_for_status() # Re-levanta erro HTTP
-                 else:
-                      flash('Erro de comunicação ao iniciar registro.', 'danger')
+                # Process webhook response (similar to login)
+                try: 
+                    response_data = response.json()
+                    logger.info(f"Response from WEBHOOK_REGISTRATION (request_otp): {response_data}")
+                    status = None
+                    if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                         status = response_data[0].get('status')
+                    elif isinstance(response_data, dict):
+                         status = response_data.get('status')
 
-        except requests.exceptions.RequestException as req_err:
-            logger.error(f"Erro de rede ao chamar WEBHOOK_REGISTRATION para {email}: {req_err}")
-            flash('Erro ao conectar ao serviço de autenticação. Tente novamente.', 'danger')
-        except Exception as e:
-            # Erro HTTP ou outro erro geral
-            # ... (lógica de tratamento de erro genérico mantida) ...
-            error_message = f"Erro inesperado ao solicitar OTP: {e}"
-            # ... (extrair mensagem se possível) ...
-            flash(f"Erro inesperado: {error_message}", 'danger')
+                    if response.status_code < 300 and (status == 'success' or status is None):
+                        logger.info(f"Registration OTP request accepted for {email}.")
+                        session['email_for_registration_otp'] = email
+                        session.modified = True
+                        flash('A verification code has been sent to your email.', 'info')
+                        # Re-render SAME page, now showing OTP form
+                        otp_form = VerifyOtpForm() 
+                        return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
+                    else:
+                        error_message = response_data.get('message', 'Could not send verification code. Is the email already registered?')
+                        logger.warning(f"Webhook denied OTP request for {email}: Status={status}, Msg={error_message}")
+                        flash(error_message, 'danger')
+                         
+                except ValueError: # Not valid JSON
+                     logger.error(f"Webhook (REGISTRATION OTP request) invalid JSON. Status: {response.status_code}, Response: {response.text[:200]}")
+                     if response.status_code >= 400:
+                          response.raise_for_status()
+                     else:
+                          flash('Communication error during registration.', 'danger')
 
-    # GET ou POST com erro
-    return render_template('auth/register.html', title='Registrar', form=form)
-
-# --- Nova Rota para Verificar OTP do Registro --- 
-@auth_bp.route('/verify-registration-otp', methods=['GET', 'POST'])
-def verify_registration_otp():
-    email = session.get('otp_email_for_registration')
-    if not email:
-        flash('No email found for OTP verification. Please start registration again.', 'warning')
-        return redirect(url_for('auth.register'))
-        
-    form = VerifyOtpForm() # Agora inclui username e password
-    
-    if form.validate_on_submit():
-        otp_code = form.otp.data
-        username = form.username.data
-        password = form.password.data
-        
-        webhook_url = os.environ.get('WEBHOOK_REGISTRATION')
-        if not webhook_url:
-            logger.error("WEBHOOK_REGISTRATION não configurado para verificar OTP")
-            flash('Server configuration error.', 'danger')
-            return render_template('auth/verify_registration_otp.html', title='Completar Registro', form=form, email=email)
-        
-        # --- Get UTM data from session --- 
-        utm_data = session.get('utm_data', {}) # Get dict or empty dict if not found
-        if utm_data:
-            logger.info(f"UTM data found in session for {email}: {utm_data}")
-        # --- End Get UTM data --- 
-        
-        try:
-            payload = {
-                'email': email,
-                'otp': otp_code,
-                'username': username,
-                'password': password,
-                'event': 'verify_otp',
-                'utm_parameters': utm_data # --- Include UTM data in payload --- 
-            }
+            except requests.RequestException as e:
+                logger.error(f"Network error requesting registration OTP: {e}")
+                flash('Network error. Could not send verification code.', 'danger')
+            except Exception as e:
+                logger.error(f"Unexpected error requesting registration OTP: {e}")
+                flash('An unexpected error occurred.', 'danger')
             
-            logger.info(f"Enviando verificação de OTP para webhook: {payload}")
-            response = requests.post(webhook_url, json=payload, timeout=15)
-            response.raise_for_status()
+            # Fallthrough: re-render email form on failure
+            return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
+
+        # --- STAGE 2: OTP + Username Verification --- 
+        elif otp_form and otp_form.validate_on_submit():
+            otp_code = otp_form.otp.data
+            username = otp_form.username.data
+            email = email_for_otp # Get email from session
             
-            response_data = response.json()
-            logger.info(f"Resposta do webhook de verificação: {response_data}")
-            
-            if isinstance(response_data, dict) and response_data.get('success'):
-                # --- User registered successfully, log them in --- 
-                user_info = response_data.get('user')
-                if not user_info or not isinstance(user_info, dict):
-                    logger.error(f"Resposta de sucesso do webhook sem dados de usuário para {email}")
-                    flash('Failed to retrieve user data after verification. Please try logging in.', 'warning')
-                    return redirect(url_for('auth.login'))
+            if not email:
+                 flash('Session expired. Please enter your email again.', 'warning')
+                 session.pop('email_for_registration_otp', None)
+                 return redirect(url_for('auth.register'))
+                 
+            webhook_url = os.environ.get('WEBHOOK_AUTHENTICATE_OTP') # USE THIS WEBHOOK FOR VERIFICATION
+            if not webhook_url:
+                logger.error("WEBHOOK_AUTHENTICATE_OTP not configured")
+                flash('Server configuration error. Cannot verify registration.', 'danger')
+                return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
 
-                # Extract necessary info (adjust keys based on your actual webhook response)
-                user_id = user_info.get('id')
-                user_email = user_info.get('email', email)
-                user_username = user_info.get('username', username)
-                user_is_admin = user_info.get('is_admin', False)
-                user_is_premium = user_info.get('is_premium', False)
-                user_age = user_info.get('age')
-                user_ai_credits = user_info.get('ai_credits', 0)
-                access_token = response_data.get('access_token') # Or however your webhook returns it
-                refresh_token = response_data.get('refresh_token')
-                auth_id = user_info.get('auth_id') # Supabase Auth ID if provided
+            # --- Get UTM data from session --- 
+            utm_data = session.get('utm_data', {})
+            if utm_data:
+                logger.info(f"UTM data found in session for {email}: {utm_data}")
+            # --- End Get UTM data --- 
 
-                # Ensure essential data is present
-                if not user_id or not user_email or not user_username:
-                     logger.error(f"Dados essenciais ausentes na resposta do webhook para {email}: {user_info}")
-                     flash('Falha ao processar resposta do servidor. Tente novamente.', 'danger')
-                     return render_template('auth/verify_registration_otp.html', title='Completar Registro', form=form, email=email)
-
-                # Create Flask User object
-                flask_user = User(
-                    id=user_id, # Use the ID from your user_new table
-                    email=user_email,
-                    username=user_username,
-                    is_admin=user_is_admin,
-                    is_premium=user_is_premium,
-                    age=user_age,
-                    ai_credits=user_ai_credits
-                )
-                login_user(flask_user) # Log the user in
-
-                # Store necessary data in Flask session
-                session['user_data'] = {
-                     'id': str(flask_user.id), # Ensure ID is string for session/load_user
-                     'username': flask_user.username,
-                     'email': flask_user.email,
-                     'is_admin': flask_user.is_admin,
-                     'is_premium': flask_user.is_premium,
-                     'age': flask_user.age,
-                     'ai_credits': flask_user.ai_credits,
-                     'auth_id': auth_id # Store Supabase Auth ID if needed
+            try:
+                payload = {
+                    'email': email,
+                    'otp': otp_code,
+                    'username': username,
+                    'event': 'verify_registration_otp',
+                    'utm_parameters': utm_data
                 }
-                # We might not need to store the tokens in the Flask session if login_user handles it
-                # session['supabase_access_token'] = access_token
-                # session['supabase_refresh_token'] = refresh_token
-                session.modified = True
-                session.pop('otp_email_for_registration', None) # Clean up OTP email
-                session.pop('utm_data', None) # Clean up UTM data after sending
-                session.pop('utm_captured', None) # Clean up capture flag
-
-                logger.info(f"Registro completo e login bem-sucedido para {flask_user.email}")
-                flash('Registration complete and successfully logged in!', 'success')
+                logger.info(f"Verifying registration OTP and username for {email} via {webhook_url}")
+                response = requests.post(webhook_url, json=payload, timeout=15)
+                response.raise_for_status()
+                response_data = response.json()
+                logger.info(f"Response from WEBHOOK_AUTHENTICATE_OTP (verify_registration_otp): {response_data}")
                 
-                # Redirect logic (similar to login)
-                next_page = session.pop('next_url', None)
-                if not next_page or not is_safe_url(next_page):
-                    next_page = url_for('main.index')
-                return redirect(next_page)
-                # --- End Login --- 
-            else:
-                # Handle verification failure
-                error_msg = response_data.get('message', 'Invalid OTP code or username.') if isinstance(response_data, dict) else 'Verification failed.'
-                flash(error_msg, 'danger')
-        except requests.RequestException as e:
-            logger.error(f"Erro de rede ao verificar OTP: {str(e)}")
-            flash('Network error during verification. Please try again.', 'danger')
-        except Exception as e:
-            logger.error(f"Erro inesperado ao verificar OTP: {str(e)}")
-            logger.error(traceback.format_exc())
-            flash('An unexpected error occurred. Please try again.', 'danger')
-            
-    return render_template('auth/verify_registration_otp.html', title='Completar Registro', form=form, email=email)
+                # --- ADJUSTED RESPONSE HANDLING (v2) --- 
+                user_info = None
+                # Case 1: Response is a list containing a user dictionary
+                if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                    user_info = response_data[0] 
+                    logger.info(f"Webhook returned user data (list format) successfully for registration: {email}")
+                # Case 2: Response is a direct user dictionary (check for presence of 'id')
+                elif isinstance(response_data, dict):
+                    # --- ADD EXTRA LOGGING --- 
+                    retrieved_id = response_data.get('id')
+                    logger.info(f"Checking dict response: found 'id'? Type={type(retrieved_id)}, Value='{retrieved_id}'")
+                    # --- END EXTRA LOGGING --- 
+                    if retrieved_id: # Check if the retrieved ID is truthy
+                        user_info = response_data
+                        logger.info(f"Webhook returned user data (dict format) successfully for registration: {email}")
 
-# Rota resend_otp ajustada
-@auth_bp.route('/resend-otp', methods=['GET'])
+                # Check if we got the user info dictionary from either case
+                if user_info:
+                    # --- Extract User data from the dictionary (user_info) --- 
+                    user_id = user_info.get('id')
+                    user_email = user_info.get('email', email)
+                    user_username = user_info.get('username', username) # Use username from form as fallback?
+                     # Convert string booleans/numbers
+                    user_is_admin_str = str(user_info.get('is_admin', 'false')).lower()
+                    user_is_admin = user_is_admin_str == 'true'
+                    user_is_premium_str = str(user_info.get('is_premium', 'false')).lower()
+                    user_is_premium = user_is_premium_str == 'true'
+                    user_age = user_info.get('age')
+                    try:
+                        user_ai_credits = int(user_info.get('ai_credits', 0))
+                    except (ValueError, TypeError):
+                        user_ai_credits = 0
+                    auth_id = user_info.get('auth-id') # Key might be 'auth-id'
+                    access_token = user_info.get('access_token') # Not usually needed for registration login?
+                    refresh_token = user_info.get('refresh_token')
+                    
+                    if not user_id or not user_email or not user_username:
+                         logger.error(f"Webhook success but missing essential user data for {email}: {user_info}")
+                         flash('Registration failed: Invalid user data received.', 'danger')
+                         return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
+                         
+                    flask_user = User(
+                        id=user_id, 
+                        email=user_email,
+                        username=user_username,
+                        is_admin=user_is_admin,
+                        is_premium=user_is_premium,
+                        age=user_age,
+                        ai_credits=user_ai_credits
+                    )
+                    login_user(flask_user, remember=True) # Log in after registration
+                    logger.info(f"Registration and login successful for {email}")
+                    
+                    # Clean up session
+                    session.pop('email_for_registration_otp', None)
+                    session.pop('utm_data', None) 
+                    session.pop('utm_captured', None)
+                    
+                    # Store user data in session
+                    session['user_data'] = {
+                         'id': str(flask_user.id),
+                         'username': flask_user.username,
+                         'email': flask_user.email,
+                         'is_admin': flask_user.is_admin,
+                         'is_premium': flask_user.is_premium,
+                         'age': flask_user.age,
+                         'ai_credits': flask_user.ai_credits,
+                         'auth_id': auth_id
+                    }
+                    session.modified = True
+                    flash('Registration complete and successfully logged in!', 'success')
+                    
+                    # Redirect
+                    next_page = session.pop('next_url', None)
+                    if not next_page or not is_safe_url(next_page):
+                        next_page = url_for('main.index')
+                    return redirect(next_page)
+                    # --- End User Login --- 
+                else:
+                    logger.warning(f"Failed OTP/username verification for {email}. Webhook response did not contain expected user data. Response: {response_data}")
+                    flash('Invalid verification code/username or verification failed.', 'danger')
+                    # Re-render OTP form
+                    return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
+            
+            except requests.RequestException as e:
+                logger.error(f"Network error verifying registration OTP/username: {e}")
+                flash('Network error. Could not verify registration.', 'danger')
+                return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
+            except Exception as e:
+                logger.error(f"Unexpected error verifying registration OTP/username: {e}")
+                logger.error(traceback.format_exc())
+                flash('An unexpected error occurred.', 'danger')
+                return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
+
+    # --- Handle GET requests --- 
+    if otp_sent:
+        # If GET request but OTP was sent (e.g., refresh), show OTP+username form
+        return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
+    else:
+        # Standard GET request, show initial email form
+        return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
+
+@auth_bp.route('/resend-otp', methods=['POST'])
 def resend_otp():
-    # Usar a chave de sessão correta
-    email = session.get('otp_email_for_registration') 
+    # Determine if it's for login or registration based on request data (or session check)
+    data = request.get_json()
+    resend_context = data.get('context', 'unknown') # Expect 'login' or 'registration'
+    
+    email = None
+    if resend_context == 'login':
+        email = session.get('email_for_login_otp') 
+    elif resend_context == 'registration':
+        email = session.get('email_for_registration_otp') 
+
     if not email:
-        flash('Sessão inválida ou expirada para reenviar OTP.', 'warning')
-        return redirect(url_for('auth.register'))
+        logger.warning(f"Resend OTP request received with invalid context '{resend_context}' or missing session email.")
+        return jsonify({'success': False, 'message': 'Invalid session or request. Please start over.'}), 400
 
     webhook_url = os.environ.get('WEBHOOK_RESENDOTP')
     if not webhook_url:
-        logger.error("WEBHOOK_RESENDOTP não configurado para reenvio")
-        flash('Erro de configuração do servidor.', 'danger')
-        return redirect(url_for('auth.verify_registration_otp')) # Volta para a tela OTP correta
+        logger.error("WEBHOOK_RESENDOTP not configured.")
+        # Return JSON error to the frontend
+        return jsonify({'success': False, 'message': 'Server configuration error.'}), 500
         
     try:
-        logger.info(f"Enviando REENVIO de OTP para webhook: {webhook_url} para email: {email}")
+        logger.info(f"Requesting OTP resend for {email} via {webhook_url} (Context: {resend_context})")
         payload = {
             'email': email,
-            'event': 'request_otp' 
+            'event': 'request_otp' # Or specific event like 'request_login_otp_resend' if needed
         }
         response = requests.post(webhook_url, json=payload, timeout=15)
-        # Verificar resposta como no registro inicial
+        
+        # Process webhook response
         try:
             response_data = response.json()
             status = None
@@ -498,29 +517,34 @@ def resend_otp():
                  status = response_data.get('status')
             
             if response.status_code < 300 and (status == 'success' or status is None):
-                 logger.info(f"Webhook aceitou REENVIO de OTP para {email}")
-                 flash('Um novo código OTP foi enviado para o seu e-mail.', 'info')
+                 logger.info(f"Webhook accepted OTP resend for {email}")
+                 # Return JSON success to the frontend
+                 return jsonify({'success': True, 'message': 'A new code has been sent.'})
             else:
-                 error_message = response_data.get('message', 'Não foi possível reenviar o código.')
-                 logger.warning(f"Webhook negou REENVIO para {email}: Status={status}, Msg={error_message}")
-                 flash(error_message, 'danger')
+                 error_message = response_data.get('message', 'Could not resend the code.')
+                 logger.warning(f"Webhook denied resend for {email}: Status={status}, Msg={error_message}")
+                 # Return JSON error to the frontend
+                 return jsonify({'success': False, 'message': error_message}), 400 # Or appropriate status
                  
         except ValueError:
-             logger.error(f"Webhook (REENVIO) não retornou JSON válido. Status: {response.status_code}")
+             logger.error(f"Webhook (RESENDOTP) returned invalid JSON. Status: {response.status_code}")
              if response.status_code >= 400:
-                  response.raise_for_status()
-             else:
-                  flash('Erro de comunicação ao reenviar.', 'danger')
+                  response.raise_for_status() # Let Flask handle the HTTP error maybe?
+             # Return JSON error to the frontend
+             return jsonify({'success': False, 'message': 'Server communication error.'}), 500
 
     except requests.exceptions.RequestException as req_err:
-        logger.error(f"Erro de rede ao REENVIAR OTP: {req_err}")
-        flash('Erro ao conectar para reenviar. Tente novamente.', 'danger')
+        logger.error(f"Network error during OTP resend for {email}: {req_err}")
+        # Return JSON error to the frontend
+        return jsonify({'success': False, 'message': 'Network error. Please try again.'}), 500
     except Exception as e:
-        # ... (lógica de tratamento de erro genérico mantida) ...
-        flash(f"Erro inesperado ao reenviar: {str(e)}", 'danger')
+        logger.error(f"Unexpected error during OTP resend for {email}: {e}")
+        logger.error(traceback.format_exc())
+        # Return JSON error to the frontend
+        return jsonify({'success': False, 'message': 'An unexpected server error occurred.'}), 500
 
-    # Redireciona de volta para a página de verificação OTP correta
-    return redirect(url_for('auth.verify_registration_otp'))
+    # REMOVED: No longer redirecting, always returns JSON
+    # return redirect(url_for('auth.verify_registration_otp')) # Old redirect
 
 @auth_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -878,368 +902,4 @@ def test_email():
         logger.error(f"Erro ao enviar email de teste: {str(e)}")
         logger.error(traceback.format_exc())
         flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
-        return redirect(url_for('main.index'))
-
-@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
-def forgot_password():
-    """Rota para solicitar redefinição de senha via OTP"""
-    if request.method == 'POST':
-        logger.info("Processando solicitação de redefinição de senha via OTP")
-        
-        # Obter URL do webhook
-        webhook_url = os.environ.get('WEBHOOK_PASSWORD_RESET_OTP')
-        
-        # Verificar se a variável existe e tem conteúdo
-        if not webhook_url:
-            logger.error("WEBHOOK_PASSWORD_RESET_OTP não está definido no .env")
-            flash('Server configuration error. Please contact administrator.', 'danger')
-            return redirect(url_for('auth.forgot_password'))
-        
-        email = request.form.get('email')
-        if not email:
-            flash('Please enter your email.', 'danger')
-            return redirect(url_for('auth.forgot_password'))
-
-        try:
-            # Enviar dados para webhook
-            webhook_data = {
-                'email': email,
-                'event': 'forgot_password_otp'
-            }
-
-            logger.info(f"Enviando requisição para: {webhook_url}")
-            
-            response = requests.post(
-                webhook_url.strip(),
-                json=webhook_data,
-                headers={'Content-Type': 'application/json'},
-                timeout=10
-            )
-            
-            logger.info(f"Status: {response.status_code}")
-            
-            # Verificar resposta
-            if response.status_code == 200:
-                try:
-                    # Tentar obter JSON da resposta
-                    resp_data = response.json()
-                    status = resp_data.get('status')
-                    
-                    if status == 'success' or status == True:
-                        flash('Verification code sent! Check your email to complete the process.', 'success')
-                        # Redirecionar diretamente para a página de verificação OTP
-                        return redirect(url_for('auth.verify_otp', email=email))
-                    else:
-                        message = resp_data.get('message', 'Unknown error occurred.')
-                        flash(f'Error: {message}', 'danger')
-                        logger.error(f"Erro reportado pelo webhook: {message}")
-                        return render_template('auth/forgot_password.html')
-                except:
-                    # Se não conseguir obter JSON, considerar sucesso pelo status HTTP
-                    flash('Verification code sent! Check your email to complete the process.', 'success')
-                    # Redirecionar diretamente para a página de verificação OTP
-                    return redirect(url_for('auth.verify_otp', email=email))
-                
-            else:
-                logger.error(f"Erro do webhook: {response.status_code}")
-                flash('Error processing your request. Please try again later.', 'danger')
-                return render_template('auth/forgot_password.html')
-
-        except Exception as e:
-            logger.error(f"Erro ao processar solicitação: {str(e)}")
-            flash('Error processing your request. Please try again later.', 'danger')
-            return render_template('auth/forgot_password.html')
-
-    return render_template('auth/forgot_password.html')
-
-@auth_bp.route('/verify-otp/<email>', methods=['GET', 'POST'])
-def verify_otp(email):
-    """Rota para verificar OTP e definir nova senha"""
-    if not email:
-        flash('Email not provided. Please try again.', 'danger')
-        return redirect(url_for('auth.forgot_password'))
-    
-    if request.method == 'POST':
-        # Obter dados do formulário
-        otp_code = request.form.get('otp_code')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
-        
-        # Validar entradas
-        if not otp_code:
-            flash('Verification code is required.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-        
-        if not new_password:
-            flash('New password is required.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-            
-        if new_password != confirm_password:
-            flash('Passwords do not match.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-            
-        if len(new_password) < 6:
-            flash('Password must be at least 6 characters long.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-        
-        # Obter URL do webhook
-        webhook_url = os.environ.get('WEBHOOK_PASSWORD_CREATE_OTP')
-        
-        # Verificar se a variável existe e tem conteúdo
-        if not webhook_url:
-            logger.error("WEBHOOK_PASSWORD_CREATE_OTP não está definido no .env")
-            flash('Server configuration error. Please contact administrator.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-            
-        try:
-            # Preparar dados para enviar ao webhook
-            webhook_data = {
-                'email': email,
-                'otp': otp_code,
-                'password': new_password,  # Enviar senha em texto puro conforme solicitado
-                'event': 'verify_otp_reset_password'
-            }
-            
-            logger.info(f"Enviando verificação OTP para: {webhook_url}")
-            
-            response = requests.post(
-                webhook_url.strip(),
-                json=webhook_data,
-                headers={'Content-Type': 'application/json'},
-                timeout=10
-            )
-            
-            logger.info(f"Status: {response.status_code}")
-            
-            # Processar resposta
-            if response.status_code == 200:
-                try:
-                    # Tentar obter JSON da resposta
-                    resp_data = response.json()
-                    status = resp_data.get('status')
-                    
-                    if status == 'success' or status == True:
-                        flash('Your password has been reset successfully!', 'success')
-                        return render_template('auth/password_reset_success.html')
-                    else:
-                        message = resp_data.get('message', 'Invalid or expired verification code.')
-                        flash(f'Error: {message}', 'danger')
-                        logger.error(f"Erro reportado pelo webhook: {message}")
-                        return render_template('auth/verify_otp.html', email=email)
-                except:
-                    # Se não conseguir obter JSON, considerar sucesso pelo status HTTP
-                    flash('Your password has been reset successfully!', 'success')
-                    return render_template('auth/password_reset_success.html')
-            else:
-                logger.error(f"Erro do webhook: {response.status_code}")
-                flash('Invalid or expired verification code. Please try again.', 'danger')
-                return render_template('auth/verify_otp.html', email=email)
-                
-        except Exception as e:
-            logger.error(f"Erro ao processar verificação OTP: {str(e)}")
-            flash('Error processing your request. Please try again later.', 'danger')
-            return render_template('auth/verify_otp.html', email=email)
-            
-    # GET request - exibir formulário
-    return render_template('auth/verify_otp.html', email=email)
-
-@auth_bp.route('/reset-password', methods=['GET', 'POST'])
-def reset_password():
-    """Rota para redefinição de senha via token (método antigo - mantido para compatibilidade)"""
-    if request.method == 'GET':
-        # Log detalhado para debug
-        logger.info("GET /reset-password")
-        logger.info(f"URL: {request.url}")
-        
-        return render_template('auth/reset_password.html')
-        
-    elif request.method == 'POST':
-        # Log detalhado para debug
-        logger.info("POST /reset-password")
-        logger.info(f"URL: {request.url}")
-        logger.info(f"Form: {request.form}")
-        logger.info(f"Form data: {dict(request.form)}")
-        
-        # Pega o token e a nova senha
-        token = request.form.get('token')
-        logger.info(f"Token recebido no POST: {token[:10] if token else 'None'}...")
-        
-        new_password = request.form.get('new_password')
-        
-        # Envia os dados para o webhook
-        webhook_url = os.getenv('WEBHOOK_PASSWORD_RESET')
-        if not webhook_url:
-            logger.error("WEBHOOK_PASSWORD_RESET não configurado")
-            flash('Error in configuration. Please try again later.', 'error')
-            return redirect(url_for('auth.login'))
-            
-        try:
-            # Prepara os dados para enviar ao webhook
-            data = {
-                "token": token,
-                "new_password": new_password,
-                "event": "reset_password"
-            }
-            
-            # Faz a requisição para o webhook
-            logger.info(f"Enviando dados para o webhook: {webhook_url}")
-            logger.info(f"Dados sendo enviados: {data}")
-            response = requests.post(webhook_url, json=data)
-            
-            # Log da resposta
-            logger.info(f"Status code: {response.status_code}")
-            logger.info(f"Response text: {response.text}")
-            
-            if response.status_code == 200:
-                flash('Password reset successfully! Please log in with your new password.', 'success')
-                return redirect(url_for('auth.login'))
-            else:
-                logger.error(f"Erro ao redefinir senha: {response.text}")
-                flash('Error resetting password. Please try again.', 'error')
-                return redirect(url_for('auth.login'))
-                
-        except Exception as e:
-            logger.error(f"Erro ao processar redefinição de senha: {str(e)}")
-            flash('Error processing your request. Please try again.', 'error')
-            return redirect(url_for('auth.login')) 
-
-@auth_bp.route('/create-password', methods=['GET', 'POST'])
-def create_password():
-    # Initialize variables with minimal logging
-    logger.info("Accessing create-password route")
-    
-    # Get token from all possible sources with priority to access_token
-    access_token = request.args.get('access_token', '') or request.form.get('access_token', '')
-    token = request.args.get('token', '') or request.form.get('token', '')
-    
-    # Use access_token if available, or token as fallback
-    final_token = access_token or token
-    
-    # Verify we have a valid token
-    if not final_token:
-        logger.warning("Attempt to access create-password route without token")
-        flash('Verification token not provided. Please check your email and click the link provided.', 'danger')
-        return render_template('auth/create_password.html', token_missing=True)
-    
-    # Log token detection (only first few characters for security)
-    token_preview = final_token[:10] if len(final_token) > 10 else final_token
-    logger.info(f"Token detected (first chars): '{token_preview}...'")
-    
-    if request.method == 'POST':
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        
-        # Validate password
-        if not password:
-            flash('Password is required.', 'danger')
-            return render_template('auth/create_password.html')
-        
-        if password != confirm_password:
-            flash('Passwords do not match.', 'danger')
-            return render_template('auth/create_password.html')
-        
-        if len(password) < 6:
-            flash('Password must be at least 6 characters long.', 'danger')
-            return render_template('auth/create_password.html')
-        
-        # Find the appropriate webhook
-        webhook_url = None
-        preferred_webhooks = [
-            'WEBHOOK_PASSWORD_CREATE',
-            'WEBHOOK_CREATE_PASSWORD', 
-            'WEBHOOK_PASSWORD_RESET',
-            'WEBHOOK_RESET_PASSWORD',
-            'WEBHOOK_PASSWORD',
-            'WEBHOOK_LOGIN'
-        ]
-        
-        for webhook_name in preferred_webhooks:
-            url = os.environ.get(webhook_name)
-            if url:
-                logger.info(f"Using webhook {webhook_name}")
-                webhook_url = url
-                break
-        
-        if not webhook_url:
-            # Additional attempt - search webhook with partial name
-            all_env_vars = os.environ.keys()
-            webhook_vars = [var for var in all_env_vars if 'WEBHOOK' in var.upper()]
-            
-            for env_var in webhook_vars:
-                if 'PASSWORD' in env_var.upper() or 'CREATE' in env_var.upper():
-                    url = os.environ.get(env_var)
-                    if url:
-                        logger.info(f"Using alternative webhook {env_var}")
-                        webhook_url = url
-                        break
-            
-            if not webhook_url:
-                logger.error("No webhook configured for password creation/reset! Check .env")
-                flash('Server configuration error. Please contact administrator.', 'danger')
-                return render_template('auth/create_password.html')
-        
-        # Send to webhook
-        try:
-            import requests
-            
-            # Prepare data - plain password as requested
-            payload = {
-                'password': password,  # Plain password (not hashed)
-                'access_token': final_token
-            }
-            
-            logger.info(f"Sending data to webhook")
-            
-            # Send with short timeout
-            response = requests.post(webhook_url, json=payload, timeout=10)
-            logger.info(f"Webhook response: {response.status_code}")
-            
-            # Try to parse JSON response
-            try:
-                response_data = response.json()
-                status = response_data.get('status')
-                # If email was identified in response, use it for success page
-                email = response_data.get('email', '')
-                logger.info(f"Response status: {status}")
-                
-                if status == 'success':
-                    # Password changed successfully
-                    flash('Password created successfully! You can now log in.', 'success')
-                    return render_template('auth/password_success.html', email=email)
-                
-                elif status == 'false':
-                    # Token expired or invalid
-                    error_message = "Token expired! You need to request a new email to create your password."
-                    flash(error_message, 'danger')
-                    return render_template('auth/create_password.html', error_message=error_message, token_expired=True)
-                
-                else:
-                    # Unknown status - check HTTP code
-                    if response.status_code in [200, 201, 202]:
-                        # If HTTP code is success, even without explicit status, consider success
-                        flash('Password created successfully! You can now log in.', 'success')
-                        return render_template('auth/password_success.html', email=email)
-                    else:
-                        # Unknown error
-                        logger.error(f"Webhook error: {response.status_code}")
-                        flash(f'Error creating password: {response.status_code}. Please try again or contact support.', 'danger')
-                
-            except ValueError:
-                # Response is not JSON - check HTTP code
-                if response.status_code in [200, 201, 202]:
-                    # Even without valid JSON, consider success by HTTP code
-                    flash('Password created successfully! You can now log in.', 'success')
-                    return render_template('auth/password_success.html')
-                else:
-                    logger.error(f"Webhook error (response not JSON): {response.status_code}")
-                    flash(f'Error creating password: {response.status_code}. Please try again or contact support.', 'danger')
-        
-        except requests.RequestException as e:
-            logger.error(f"Error connecting to webhook: {str(e)}")
-            flash('Could not connect to the service. Please check your connection and try again.', 'danger')
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            flash('An unexpected error occurred. Please try again or contact support.', 'danger')
-    
-    # GET or POST with error
-    return render_template('auth/create_password.html') 
+        return redirect(url_for('main.index')) 

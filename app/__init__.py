@@ -139,11 +139,11 @@ def create_app():
     
     # Configuração CSRF
     # TEMPORARIAMENTE DESABILITADO PARA PERMITIR LOGIN/REGISTRO
-    app.config['WTF_CSRF_ENABLED'] = False  # CSRF desativado emergencialmente
-    logger.warning("⚠️ AVISO DE SEGURANÇA: Proteção CSRF DESATIVADA temporariamente")
+    # app.config['WTF_CSRF_ENABLED'] = False  # CSRF desativado emergencialmente -- REMOVING THIS LINE
+    # logger.warning("⚠️ AVISO DE SEGURANÇA: Proteção CSRF DESATIVADA temporariamente")
     
-    # Configurações que serão reativadas quando o CSRF for corrigido
-    """
+    # Configurações que serão reativadas quando o CSRF for corrigido -- RE-ENABLING THESE:
+    # """
     app.config['WTF_CSRF_ENABLED'] = True
     app.config['WTF_CSRF_METHODS'] = ['POST', 'PUT', 'PATCH', 'DELETE']
     app.config['WTF_CSRF_FIELD_NAME'] = 'csrf_token'
@@ -152,10 +152,16 @@ def create_app():
     app.config['WTF_CSRF_CHECK_DEFAULT'] = True
     app.config['WTF_CSRF_SSL_STRICT'] = False  # Desativar checagem SSL estrita para CSRF
     app.config['WTF_CSRF_TIME_LIMIT'] = 86400 * 7  # 7 dias
-    app.config['WTF_I_KNOW_WHAT_IM_DOING'] = True
-    """
+    # app.config['WTF_I_KNOW_WHAT_IM_DOING'] = True # This might not be needed
+    # """
     
-    logger.info("Proteção CSRF: DESATIVADA TEMPORARIAMENTE")
+    # logger.info("Proteção CSRF: DESATIVADA TEMPORARIAMENTE") -- UPDATING LOG MESSAGE
+    logger.info("Proteção CSRF: ATIVADA")
+
+    # Initialize CSRF protection AFTER setting configurations
+    csrf = CSRFProtect()
+    csrf.init_app(app)
+    logger.info("CSRFProtect inicializado com o app")
     
     # Inicializar extensões
     # db.init_app(app)
@@ -245,7 +251,7 @@ def create_app():
         from flask_wtf.csrf import generate_csrf
         return {
             'now': datetime.utcnow(),
-            'csrf_token': generate_csrf()
+            'csrf_token': generate_csrf
         }
     
     # ==> START MOVED ERROR HANDLERS <==

@@ -8,62 +8,66 @@
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-header text-center" style="background-color: #F1F1F1;">
-                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">Register</h4>
+                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">
+                        {% if otp_sent %}Complete Registration{% else %}Register{% endif %}
+                    </h4>
                 </div>
                 <div class="card-body">
                     {% include '_messages.html' %}
                     
-                    {% if not show_otp_form %}
-                    <form method="POST" action="{{ url_for('auth.register') }}">
-                        <input type="hidden" name="action" value="register_user">
-                        {{ form.hidden_tag() if form.hidden_tag }}
-                        
-                        <div class="form-group mb-3">
-                            {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), autofocus=true) }}
-                            {% for error in form.email.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="d-grid gap-2">
-                            {{ form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
-                        </div>
-                    </form>
-                    {% endif %}
-
-                    {% if show_otp_form %}
-                    <div class="otp-section">
-                        <p class="mb-3 text-info">We sent a 6-digit code to your email: <strong>{{ otp_email }}</strong></p>
-                        <p>Please enter the code below to complete your registration.</p>
-                        
+                    {% if otp_sent %}
+                        {# --- Show OTP + Username Verification Form --- #}
+                        <p class="text-center mb-3">A verification code has been sent to <strong>{{ email }}</strong>. Enter the code and choose your username.</p>
                         <form method="POST" action="{{ url_for('auth.register') }}">
-                            <input type="hidden" name="action" value="verify_otp">
-                            
-                            <div class="mb-3">
+                            {{ otp_form.hidden_tag() if otp_form else '' }}
+                            <div class="form-group mb-3">
                                 {{ otp_form.otp.label(class="form-label") }}
-                                {{ otp_form.otp(class="form-control" + (" is-invalid" if otp_form.otp.errors else ""), autofocus=true, inputmode="numeric", pattern="[0-9]*", autocomplete="one-time-code", maxlength="6") }}
+                                {{ otp_form.otp(class="form-control", autofocus=True) }}
                                 {% for error in otp_form.otp.errors %}
-                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ otp_form.username.label(class="form-label") }}
+                                {{ otp_form.username(class="form-control") }}
+                                {% for error in otp_form.username.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="d-grid gap-2">
+                                {{ otp_form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
+                            </div>
+                        </form>
+                        <div class="text-center mt-3">
+                            <small><a href="{{ url_for('auth.register') }}">Cancel and use a different email</a></small>
+                            <br>
+                            <small><a href="#" id="resend-otp-link" class="text-muted disabled" style="pointer-events: none;">Resend Code</a> <span id="resend-timer" class="text-muted small"></span></small>
+                        </div>
+                    {% else %}
+                        {# --- Show Initial Email Form --- #}
+                        <form method="POST" action="{{ url_for('auth.register') }}">
+                            {{ registration_form.hidden_tag() if registration_form else '' }}
+                            <div class="form-group mb-3">
+                                {{ registration_form.email.label(class="form-label") }}
+                                {{ registration_form.email(class="form-control", autofocus=True) }}
+                                {% for error in registration_form.email.errors %}
+                                    <small class="text-danger">{{ error }}</small>
                                 {% endfor %}
                             </div>
                             
-                            <button type="submit" class="btn btn-primary w-100">Verify Code</button>
+                            <div class="d-grid gap-2">
+                                {{ registration_form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
+                            </div>
                         </form>
-                        
-                        <hr>
-                        <p class="text-center text-muted small">
-                            Didn't receive the code? <a href="{{ url_for('auth.resend_otp') }}">Resend code</a>
-                        </p>
-                    </div>
                     {% endif %}
-
                 </div>
-                {% if not show_otp_form %}
-                <div class="card-footer">
-                    <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                <div class="card-footer text-center">
+                    {% if not otp_sent %}
+                        <p class="mb-0">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -90,34 +94,107 @@ document.addEventListener('DOMContentLoaded', function() {
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Seleciona o formulário pelo action URL gerado pelo Flask
-    const formAction = "{{ url_for('auth.register') }}";
-    const registrationForm = document.querySelector(`form[action="${formAction}"]`);
-
-    if (registrationForm) {
-        registrationForm.addEventListener('submit', function(event) {
-            // Encontra o botão de submit DENTRO deste formulário específico
-            const submitButton = registrationForm.querySelector('input[type="submit"], button[type="submit"]'); 
+    // Logic to disable submit button on form submission
+    const formAction = "{{ url_for('auth.register') }}"; 
+    const currentForm = document.querySelector(`form[action="${formAction}"]`); 
+    if (currentForm) {
+        currentForm.addEventListener('submit', function(event) {
+            const submitButton = currentForm.querySelector('input[type="submit"], button[type="submit"]');
             if (submitButton && !submitButton.disabled) {
                 submitButton.disabled = true;
-                
-                // Muda o texto baseado no tipo de botão
-                if (submitButton.tagName === 'INPUT') {
-                    submitButton.value = 'Sending...'; // Para <input type="submit">
-                } else {
-                    submitButton.textContent = 'Sending...'; // Para <button>
+                // Change text based on which form it is
+                if (document.getElementById('{{ registration_form.email.id if registration_form else "" }}')) { 
+                    submitButton.value = 'Sending Code...';
+                } else if (document.getElementById('{{ otp_form.otp.id if otp_form else "" }}')) {
+                    submitButton.textContent = 'Registering...'; // Use textContent for button element
                 }
-                
-                // Adiciona um pequeno delay para garantir que a desativação ocorra visualmente antes do envio
-                // setTimeout(() => { /* O envio do formulário continua */ }, 50); 
-                // Nota: O delay pode não ser estritamente necessário, mas pode ajudar em alguns navegadores.
             } else {
-                 // Se o botão já está desabilitado, previne envio adicional (redundante mas seguro)
-                 // event.preventDefault(); 
-                 // Removido preventDefault aqui para garantir que o primeiro envio válido ocorra.
+                // Optional: Prevent multiple submissions if already disabled
+                // event.preventDefault();
             }
         });
     }
+
+    // --- Resend OTP Logic ---
+    const resendLink = document.getElementById('resend-otp-link');
+    const timerSpan = document.getElementById('resend-timer');
+    const otpSent = {{ otp_sent|tojson }}; // Check if we are in OTP stage
+
+    if (resendLink && timerSpan && otpSent) {
+        let countdown = 90; // 90 seconds = 1 minute 30 seconds
+        let intervalId = null;
+
+        function updateTimer() {
+            if (countdown <= 0) {
+                clearInterval(intervalId);
+                timerSpan.textContent = '';
+                resendLink.classList.remove('disabled', 'text-muted');
+                resendLink.style.pointerEvents = 'auto';
+                resendLink.textContent = 'Resend Code'; // Reset text
+            } else {
+                timerSpan.textContent = `(wait ${countdown}s)`;
+                countdown--;
+            }
+        }
+
+        function startTimer() {
+            countdown = 90;
+            resendLink.classList.add('disabled', 'text-muted');
+            resendLink.style.pointerEvents = 'none';
+            resendLink.textContent = 'Resend Code'; // Keep text consistent
+            updateTimer(); // Update immediately
+            intervalId = setInterval(updateTimer, 1000);
+        }
+
+        resendLink.addEventListener('click', async (event) => {
+            event.preventDefault();
+            if (resendLink.classList.contains('disabled')) {
+                return; // Do nothing if disabled
+            }
+
+            resendLink.classList.add('disabled', 'text-muted');
+            resendLink.style.pointerEvents = 'none';
+            resendLink.textContent = 'Sending...'; // Indicate activity
+
+            try {
+                const response = await fetch("{{ url_for('auth.resend_otp') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': "{{ csrf_token() }}" // Include CSRF token
+                    },
+                    body: JSON.stringify({ context: 'registration' }) // Specify context
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Use a subtle way to show success, maybe flash message?
+                    // For now, just restart timer
+                    alert('A new code has been sent.'); // Replace with flash message if possible
+                    startTimer();
+                } else {
+                    alert(data.message || 'Could not resend code. Please try again.');
+                    // Re-enable link immediately on failure
+                    resendLink.classList.remove('disabled', 'text-muted');
+                    resendLink.style.pointerEvents = 'auto';
+                    resendLink.textContent = 'Resend Code';
+                }
+            } catch (error) {
+                console.error('Error resending OTP:', error);
+                alert('An error occurred while trying to resend the code.');
+                 // Re-enable link immediately on failure
+                resendLink.classList.remove('disabled', 'text-muted');
+                resendLink.style.pointerEvents = 'auto';
+                resendLink.textContent = 'Resend Code';
+            }
+        });
+
+        // Start the timer when the page loads in OTP state
+        startTimer();
+    }
+    // --- End Resend OTP Logic ---
+
 });
 </script>
 {% endblock %}

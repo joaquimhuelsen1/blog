@@ -7,7 +7,7 @@ import requests
 import json
 import traceback  # Adicionar para debug
 import logging  # Adicionar para logs
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from types import SimpleNamespace
 import re # <--- Keep this import
@@ -48,14 +48,14 @@ def index():
             
         logger.info(f"Usando webhook URL: {webhook_url}")
         
+        # Ensure page is 1 and per_page is 10
         webhook_data = {
             'event': 'get_all_posts',
-            'page': page,
+            'page': 1,
             'per_page': 5,
-            'is_premium': current_user.is_authenticated and current_user.is_premium 
+            'is_premium': current_user.is_authenticated and current_user.is_premium
         }
-        
-        logger.info(f"Enviando para webhook get_all_posts: {webhook_data}")
+        logger.info(f"Enviando para webhook get_all_posts (index): {webhook_data}")
         
         try:
             response = requests.post(webhook_url, json=webhook_data, timeout=10)
@@ -65,21 +65,12 @@ def index():
             raw_response_data = response.json()
             logger.info(f"DEBUG: Raw Webhook Response Received: {raw_response_data}")
             
-            # --- CORREÇÃO: A resposta é um dicionário, não uma lista --- 
-            # Remover a verificação de lista:
-            # response_list = raw_response_data 
-            # if not response_list or not isinstance(response_list, list) or not isinstance(response_list[0], dict):
-            #      logger.error(f"Estrutura inesperada da resposta do webhook: {response_list}")
-            #      raise ValueError("Formato de resposta inválido do webhook")
-            # data = response_list[0]
-            
             # A resposta já é o dicionário que precisamos
             if not isinstance(raw_response_data, dict) or 'posts' not in raw_response_data:
                 logger.error(f"Estrutura inesperada da resposta do webhook (esperado dict com 'posts'): {raw_response_data}")
                 raise ValueError("Formato de resposta inválido do webhook - dicionário esperado")
                 
             data = raw_response_data # Usar diretamente o dicionário recebido
-            # ---------------------------------------------------------
             
             logger.info(f"Dados recebidos do webhook (processados): {data}")
             
@@ -98,40 +89,36 @@ def index():
                         post['created_at_formatted'] = 'Data não disponível'
                 posts_list.append(post)
             
-            pagination_data = data.get('pagination', {})
-            pagination = {
-                'page': page,
-                'has_next': pagination_data.get('has_next', False),
-                'has_prev': pagination_data.get('has_prev', False)
-            }
-            
             formatted_data = {
-                'posts': posts_list,
-                'pagination': pagination
+                'posts': posts_list
             }
             
-            logger.info(f"Posts processados para template: {len(posts_list)}")
+            logger.info(f"Posts processados para index: {len(posts_list)}")
             
-            return render_template('public/index.html', 
+            return render_template('public/index.html',
                                 posts=formatted_data,
+                                show_all_posts_button=True,
                                 now=datetime.utcnow())
                                 
         except requests.RequestException as e:
             logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
-            return render_template('public/index.html', 
-                                posts={'posts': [], 'pagination': None}, 
+            return render_template('public/index.html',
+                                posts={'posts': []},
+                                show_all_posts_button=False,
                                 now=datetime.utcnow())
         except ValueError as ve:
             logger.error(f"Erro ao processar resposta do webhook: {ve}")
-            return render_template('public/index.html', 
-                                posts={'posts': [], 'pagination': None}, 
+            return render_template('public/index.html',
+                                posts={'posts': []},
+                                show_all_posts_button=False,
                                 now=datetime.utcnow())
             
     except Exception as e:
         logger.error(f"Erro na rota index: {str(e)}")
         logger.error(traceback.format_exc())
-        return render_template('public/index.html', 
-                            posts={'posts': [], 'pagination': None},
+        return render_template('public/index.html',
+                            posts={'posts': []},
+                            show_all_posts_button=False,
                             now=datetime.utcnow())
 
 @main_bp.route('/post/<uuid:post_id>', methods=['GET', 'POST'])
@@ -162,36 +149,58 @@ def post(post_id):
         response_main.raise_for_status()
         response_data_main = response_main.json()
         logger.info(f"Resposta do webhook get_single_post: {response_data_main}")
-        post_data = response_data_main.get('post')
         
-        if not post_data or not isinstance(post_data, dict):
-            logger.warning(f"Post principal não encontrado para ID: {post_id_str}")
+        # The main response should now contain the post AND comments
+        # Adjust key if needed, assuming webhook returns {'post': {...}, 'comments': [...]} or similar
+        # If webhook returns the structure directly like the SQL query: {id:.., title:.., comments: [...]} 
+        # then use response_data_main directly.
+        
+        # Assuming the structure {id:.., title:.., author: {...}, comments: [...]} from the SQL query
+        post_data = response_data_main # Use the whole response if it matches the query output
+
+        if not post_data or not isinstance(post_data, dict) or not post_data.get('id'):
+            logger.warning(f"Post principal não encontrado ou formato inválido para ID: {post_id_str}")
             abort(404, description="Post not found.")
         
-        # Processar o post principal
-        post_obj = SimpleNamespace(**post_data)
-        post_obj.created_at_formatted = 'Data não disponível' # Definir um padrão
+        # Extract comments directly from the response
+        raw_comments = post_data.get('comments', []) # Get the comments array
+        comments_data = []
+        logger.info(f"Recebidos {len(raw_comments)} comentários junto com o post.")
+        # Processar comentários (formatar data, etc.)
+        for comment in raw_comments:
+             if 'created_at' in comment and isinstance(comment['created_at'], str):
+                 try:
+                     created_dt = datetime.fromisoformat(comment['created_at'].replace('Z', '+00:00'))
+                     comment['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
+                 except ValueError:
+                     logger.warning(f"Não foi possível converter created_at '{comment['created_at']}' do comentário")
+                     comment['created_at_formatted'] = 'Date unavailable' # Default formatted value
+             # Ensure author structure exists (it should come from the query)
+             if 'author' not in comment or not isinstance(comment.get('author'), dict):
+                 comment['author'] = {'username': 'Unknown'} 
+             comments_data.append(comment)
+        
+        # Processar o post principal (slightly adjusted for new structure)
+        post_obj = SimpleNamespace(**post_data) 
+        # post_obj.created_at_formatted = 'Data não disponível' # Defined below
         if hasattr(post_obj, 'created_at') and isinstance(post_obj.created_at, str):
              try:
-                 # Tenta converter para objeto datetime
                  created_dt = datetime.fromisoformat(post_obj.created_at.replace('Z', '+00:00'))
-                 # Guarda a string formatada em uma nova variável
                  post_obj.created_at_formatted = created_dt.strftime('%m/%d/%Y') 
-                 # Opcional: guardar o objeto datetime se precisar para outras lógicas
-                 # post_obj.created_at_dt = created_dt 
              except ValueError:
-                 logger.warning(f"Não foi possível converter created_at '{post_obj.created_at}' para datetime. Usando valor original ou padrão.")
-                 # Mantém o padrão 'Data não disponível' ou poderia usar a string original:
-                 # post_obj.created_at_formatted = post_obj.created_at 
+                 logger.warning(f"Não foi possível converter created_at '{post_obj.created_at}' para datetime.")
+                 post_obj.created_at_formatted = 'Date unavailable'
+        else: 
+            post_obj.created_at_formatted = 'Date unavailable' # Ensure it exists
                  
-        # Limpar o atributo original para evitar confusão no template se a conversão falhou
-        # Ou garantir que o template use APENAS created_at_formatted
-        # Vamos pela segunda opção: garantir que o template use a variável formatada.
-                 
-        if isinstance(post_data.get('author'), dict):
-            post_obj.author = SimpleNamespace(**post_data['author'])
-        else:
-            post_obj.author = SimpleNamespace(username='Desconhecido')
+        # The author object is now directly available if query is used
+        # if isinstance(post_data.get('author'), dict): 
+        #     post_obj.author = SimpleNamespace(**post_data['author'])
+        # else:
+        #     post_obj.author = SimpleNamespace(username='Desconhecido')
+        # Ensure author object exists even if join failed
+        if not hasattr(post_obj, 'author') or not isinstance(post_obj.author, dict):
+             post_obj.author = {'username': 'Unknown'} # Fallback as dict
 
         # === LÓGICA PARA PREVIEW DE POST PREMIUM ===
         is_preview = False
@@ -242,44 +251,6 @@ def post(post_id):
                     is_preview = False 
                     
         # === FIM DA LÓGICA DE PREVIEW ===
-
-        # --- PASSO 2: Buscar Comentários (Usando Webhook) --- 
-        comments_data = []
-        comment_webhook_url = os.environ.get('WEBHOOK_COMMENT_POST') # Usar o mesmo webhook
-        if comment_webhook_url:
-            try:
-                webhook_data_comments = {
-                    'event': 'get_comments', # Novo evento para buscar comentários
-                    'post_id': post_id_str
-                }
-                logger.info(f"Buscando comentários via webhook: {comment_webhook_url} - Payload: {webhook_data_comments}")
-                response_comments = requests.post(comment_webhook_url, json=webhook_data_comments, timeout=10)
-                response_comments.raise_for_status()
-                response_data_comments = response_comments.json()
-                
-                # Assume que o webhook retorna {success: true, comments: [...]} ou {success: false, message: "..."}
-                if isinstance(response_data_comments, dict) and response_data_comments.get('success'):
-                    raw_comments = response_data_comments.get('comments', [])
-                    logger.info(f"Recebidos {len(raw_comments)} comentários do webhook.")
-                    # Processar comentários (ex: formatar data)
-                    for comment in raw_comments:
-                         if 'created_at' in comment and isinstance(comment['created_at'], str):
-                             try:
-                                 comment['created_at'] = datetime.fromisoformat(comment['created_at'].replace('Z', '+00:00'))
-                             except ValueError:
-                                 logger.warning(f"Não foi possível converter created_at '{comment['created_at']}' do comentário")
-                         if 'author' not in comment or not isinstance(comment.get('author'), dict):
-                             comment['author'] = {'username': 'Unknown'} # Adiciona autor padrão
-                    comments_data = raw_comments
-                else:
-                    error_msg = response_data_comments.get('message', 'Unknown error fetching comments') if isinstance(response_data_comments, dict) else 'Invalid response format for comments'
-                    logger.error(f"Erro ao buscar comentários via webhook: {error_msg}")
-            except requests.RequestException as e_comm:
-                logger.error(f"Erro de rede ao buscar comentários: {str(e_comm)}")
-            except Exception as e_proc_comm:
-                 logger.error(f"Erro ao processar comentários do webhook: {str(e_proc_comm)}")
-        else:
-             logger.warning("WEBHOOK_COMMENT_POST não configurado, não foi possível buscar comentários.")
 
         # --- PASSO 3: Buscar Posts Recentes (Nova chamada ao Webhook) --- 
         recent_posts_data = []
@@ -362,64 +333,85 @@ def post(post_id):
         abort(500, description="An unexpected error occurred.")
 
 @main_bp.route('/post/<uuid:post_id>/comment', methods=['POST'])
-@login_required # Garantir que só usuários logados comentem
+@login_required # Ensure user is logged in
 def add_comment(post_id):
-    # --- Add Premium Check --- 
+    # Ensure only premium users can comment (double check)
     if not current_user.is_premium:
-        logger.warning(f"Tentativa de comentário bloqueada: Usuário {current_user.id} não é premium.")
-        return jsonify({'success': False, 'message': 'Commenting is a premium feature. Please upgrade your account.'}), 403 # Forbidden
-    # --- End Premium Check --- 
+        return jsonify({'success': False, 'message': 'Commenting is a Premium feature.'}), 403 # Forbidden
+        
+    form = CommentForm() # Instantiate form with request data for validation
+    post_id_str = str(post_id)
     
-    form = CommentForm()
-    
-    if form.validate_on_submit():
+    if form.validate_on_submit(): # Validates CSRF and form fields
+        content = form.content.data
+        user_id = current_user.id # Get user ID from logged-in user
+        
         webhook_url = os.environ.get('WEBHOOK_COMMENT_POST')
         if not webhook_url:
-            logger.error("WEBHOOK_COMMENT_POST não configurado!")
+            logger.error(f"WEBHOOK_COMMENT_POST not configured. Cannot submit comment for post {post_id_str}")
             return jsonify({'success': False, 'message': 'Server configuration error.'}), 500
             
+        webhook_payload = {
+            'event': 'submit_comment',
+            'user_id': str(user_id), # Ensure UUID is string if needed
+            'post_id': post_id_str,
+            'content': content,
+            'username': current_user.username # ADD USERNAME
+        }
+        
+        logger.info(f"Submitting comment via webhook: {webhook_payload}")
+        
         try:
-            payload = {
-                'event': 'add_comment',
-                'post_id': str(post_id), 
-                'user_id': str(current_user.id), # Envia ID do usuário
-                'username': current_user.username, # Envia username
-                'content': form.content.data,
-                'is_admin': current_user.is_admin # Informa se é admin para aprovação automática?
-            }
-            
-            logger.info(f"Enviando comentário para webhook: {webhook_url} - Payload: {payload}")
-            response = requests.post(webhook_url, json=payload, timeout=15)
-            response.raise_for_status() # Levanta erro para status >= 400
-            
+            response = requests.post(webhook_url, json=webhook_payload, timeout=15)
+            response.raise_for_status()
             response_data = response.json()
-            logger.info(f"Resposta do webhook de comentário: {response_data}")
+            logger.info(f"Webhook response for comment submission: {response_data}")
             
-            # Assume que o webhook retorna {success: true/false, message: "..."}
-            if isinstance(response_data, dict) and response_data.get('success'):
-                flash_message = response_data.get('message', 'Comment submitted successfully!')
-                if not current_user.is_admin:
-                     flash_message = "Your comment has been submitted for review."
-                return jsonify({'success': True, 'message': flash_message})
-            else:
-                error_message = response_data.get('message', 'Failed to submit comment.') if isinstance(response_data, dict) else 'Unknown error from webhook.'
-                logger.error(f"Erro retornado pelo webhook de comentário: {error_message}")
-                return jsonify({'success': False, 'message': error_message}), 400
+            # --- ADJUSTED: Process response format {comment_data} --- 
+            new_comment_data = None
+            # Check if response is a dictionary with an 'id' key
+            if isinstance(response_data, dict) and response_data.get('id'):
+                new_comment_data = response_data # Use the dictionary directly
                 
-        except requests.RequestException as req_err:
-            logger.error(f"Erro de rede ao enviar comentário para webhook: {req_err}")
-            return jsonify({'success': False, 'message': 'Network error contacting comment service.'}), 503
+                # Process comment data slightly for frontend (e.g., date, author structure)
+                if 'created_at' in new_comment_data and isinstance(new_comment_data['created_at'], str):
+                     try:
+                         # Use strptime for potentially varying fractional seconds
+                         created_dt_naive = datetime.strptime(new_comment_data['created_at'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
+                         # Assume UTC if no timezone info
+                         created_dt = created_dt_naive.replace(tzinfo=timezone.utc)
+                         new_comment_data['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
+                     except ValueError:
+                         logger.warning(f"Could not parse comment created_at: {new_comment_data['created_at']}")
+                         new_comment_data['created_at_formatted'] = 'Just now' # Fallback
+                
+                # Create the author structure expected by the frontend
+                author_username = new_comment_data.get('username', 'Unknown') # Get username from response
+                new_comment_data['author'] = {'username': author_username}
+                
+                logger.info(f"Comment submitted successfully for post {post_id_str}")
+                return jsonify({'success': True, 'comment': new_comment_data})
+                 
+            # If response format is not the expected dictionary
+            else:
+                logger.error(f"Webhook returned unexpected format for comment submission. Expected dict with id, got: {response_data}")
+                return jsonify({'success': False, 'message': 'Failed to process comment data after submission.'}), 500
+            # --- END ADJUSTMENT ---
+
+        except requests.RequestException as e:
+            logger.error(f"Network error submitting comment for post {post_id_str}: {e}")
+            return jsonify({'success': False, 'message': 'Network error submitting comment.'}), 500
         except Exception as e:
-            logger.exception(f"Erro inesperado ao adicionar comentário via webhook")
-            return jsonify({'success': False, 'message': 'An unexpected server error occurred.'}), 500
-    else:
-        # Falha na validação do formulário (CSRF, campo vazio, etc.)
-        errors = form.errors
-        logger.warning(f"Falha na validação do formulário de comentário: {errors}")
-        # Idealmente, extrair a mensagem de erro específica
-        first_error = next(iter(errors.values()))[0] if errors else "Invalid input."
-        return jsonify({'success': False, 'message': first_error}), 400
-# ---------------------------------------------------- 
+            logger.error(f"Unexpected error submitting comment for post {post_id_str}: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({'success': False, 'message': 'An unexpected error occurred.'}), 500
+            
+    else: # Form validation failed
+        # Extract validation errors
+        errors = form.errors.get('content', ['Invalid input.'])
+        logger.warning(f"Comment form validation failed for post {post_id_str}: {errors}")
+        return jsonify({'success': False, 'message': errors[0]}), 400
+# --- End modified route --- 
 
 @main_bp.route('/posts')
 def all_posts():
@@ -429,117 +421,155 @@ def all_posts():
     """
     try:
         logger.info(f"Acessando lista de posts")
-        
+
         # Parâmetros da URL
         page = request.args.get('page', 1, type=int)
         post_type = request.args.get('type', 'all')  # all, free, premium
         sort_by = request.args.get('sort', 'recent')  # recent, read_time_asc, read_time_desc
-        
+
         logger.info(f"Parâmetros: page={page}, type={post_type}, sort={sort_by}")
-        
+
         # Verificar se já temos os posts na sessão (para evitar chamadas repetidas)
-        all_posts = session.get('all_posts_data')
-        
+        all_posts_data = session.get('all_posts_data')
+
         # Se não temos os posts ou se passaram mais de 5 minutos, buscar novamente
-        refresh_posts = all_posts is None or session.get('all_posts_timestamp', 0) < (datetime.now().timestamp() - 300)
-        
+        refresh_posts = all_posts_data is None or session.get('all_posts_timestamp', 0) < (datetime.now().timestamp() - 300)
+
         if refresh_posts:
             logger.info("Posts não encontrados na sessão ou cache expirado. Buscando do webhook...")
-            
+
             # Preparar dados para o webhook (simplificado - apenas um evento)
             webhook_url = os.environ.get('WEBHOOK_GET_POSTS')
             if not webhook_url:
                 logger.error("WEBHOOK_GET_POSTS não configurado no .env")
-                abort(500, description="Webhook URL not configured")
-                
+                flash("Erro de configuração do servidor.", "danger")
+                return redirect(url_for('main.index'))
+
             webhook_data = {
                 'event': 'get_all_posts',  # Mesmo evento usado na home
                 'page': 1,                 # Página 1
-                'per_page': 1000,          # Limite alto para trazer todos
-                'is_premium': True         # Buscar todos, inclusive premium
+                'per_page': 1000,          # Limite alto para trazer todos (webhook needs to support this)
+                'is_premium': True         # Buscar todos, inclusive premium (webhook needs to respect this)
             }
-            
+
             logger.info(f"Enviando para webhook get_all_posts: {webhook_data}")
-            
-            # Fazer requisição para o webhook
-            response = requests.post(webhook_url, json=webhook_data, timeout=10)
-            response.raise_for_status()
-            
-            # Processar resposta
-            data = response.json()
-            logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
-            
-            # Extrair e processar posts
-            all_posts = data.get('posts', [])
-            
-            # Verificar se posts_data é um dicionário único ou uma lista
-            if isinstance(all_posts, dict):
-                all_posts = [all_posts]  # Converte para lista com um item
-            
-            # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
-            for post in all_posts:
-                if 'created_at' in post and post['created_at']:
-                    try:
-                        # Manter a data como string mas já formatada
-                        created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
-                        post['created_at_dt'] = created_dt  # Guardar o objeto datetime para ordenação
-                        post['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')  # Para display
-                    except (ValueError, AttributeError):
-                        post['created_at_formatted'] = 'Data não disponível'
-                        
-            # Armazenar na sessão com timestamp
-            session['all_posts_data'] = all_posts
-            session['all_posts_timestamp'] = datetime.now().timestamp()
-            logger.info(f"Posts armazenados na sessão: {len(all_posts)}")
+
+            try:
+                # Fazer requisição para o webhook
+                response = requests.post(webhook_url, json=webhook_data, timeout=20) # Longer timeout
+                response.raise_for_status()
+
+                # Processar resposta
+                data = response.json()
+
+                # Check response structure (expecting dict with 'posts')
+                if not isinstance(data, dict) or 'posts' not in data:
+                     logger.error(f"Estrutura inesperada da resposta do webhook para all_posts: {data}")
+                     raise ValueError("Formato de resposta inválido do webhook")
+
+                logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
+
+                # Extrair e processar posts
+                all_posts_data = data.get('posts', [])
+
+                # Verificar se posts_data é um dicionário único ou uma lista
+                if isinstance(all_posts_data, dict):
+                    all_posts_data = [all_posts_data]  # Converte para lista com um item
+
+                # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
+                for post in all_posts_data:
+                    if 'created_at' in post and post['created_at']:
+                        try:
+                            # Guardar o objeto datetime para ordenação E a string formatada
+                            created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+                            post['created_at_dt'] = created_dt
+                            post['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
+                        except (ValueError, AttributeError):
+                            post['created_at_formatted'] = 'Data não disponível'
+                            post['created_at_dt'] = datetime.min.replace(tzinfo=timezone.utc) # Fallback for sorting
+
+                # Armazenar na sessão com timestamp
+                session['all_posts_data'] = all_posts_data
+                session['all_posts_timestamp'] = datetime.now().timestamp()
+                logger.info(f"Posts armazenados na sessão: {len(all_posts_data)}")
+
+            except requests.RequestException as e:
+                 logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
+                 flash("Não foi possível buscar os posts. Tente novamente mais tarde.", "danger")
+                 return redirect(url_for('main.index'))
+            except ValueError as e:
+                 logger.error(f"Erro ao processar resposta do webhook: {str(e)}")
+                 flash("Erro ao processar dados dos posts.", "danger")
+                 return redirect(url_for('main.index'))
         else:
-            logger.info(f"Usando posts da sessão: {len(all_posts)}")
-            
+            logger.info(f"Usando posts da sessão: {len(all_posts_data)}")
+
         # --- FILTRAR E ORDENAR OS POSTS NA MEMÓRIA ---
-        filtered_posts = all_posts
-        
+        filtered_posts = all_posts_data
+
         # 1. Filtrar por tipo
         if post_type == 'free':
             filtered_posts = [p for p in filtered_posts if not p.get('premium_only', False)]
         elif post_type == 'premium':
-            filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
-            
+            # Ensure only authenticated premium users see premium posts here too
+            if current_user.is_authenticated and current_user.is_premium:
+                filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
+            else:
+                 # If non-premium user tries to filter for premium, show nothing or redirect?
+                 # Showing nothing is safer.
+                 filtered_posts = []
+                 flash("You need to be a premium member to view premium posts.", "warning")
+
+
         # 2. Ordenar
-        if sort_by == 'recent':
-            # Ordenar por data (mais recentes primeiro)
-            filtered_posts.sort(key=lambda p: p.get('created_at', ''), reverse=True)
-        elif sort_by == 'read_time_asc':
-            # Ordenar por tempo de leitura (do menor para o maior)
-            filtered_posts.sort(key=lambda p: p.get('reading_time', 0))
+        sort_key = 'created_at_dt' # Default sort key
+        reverse_sort = True # Default: recent first
+
+        if sort_by == 'read_time_asc':
+            sort_key = lambda p: p.get('reading_time', 0) or 0 # Handle None
+            reverse_sort = False
         elif sort_by == 'read_time_desc':
-            # Ordenar por tempo de leitura (do maior para o menor)
-            filtered_posts.sort(key=lambda p: p.get('reading_time', 0), reverse=True)
-            
+            sort_key = lambda p: p.get('reading_time', 0) or 0 # Handle None
+            reverse_sort = True
+        # else 'recent' uses default created_at_dt
+
+        # Ensure sort key exists or provide fallback
+        def get_sort_key(post):
+             if callable(sort_key):
+                  return sort_key(post)
+             # Use created_at_dt as primary sort key, provide fallback if missing
+             return post.get(sort_key, datetime.min.replace(tzinfo=timezone.utc))
+
+        filtered_posts.sort(key=get_sort_key, reverse=reverse_sort)
+
         # Contagem de posts por categoria (para os filtros no template)
+        # Ensure calculation happens on the originally cached data if possible
+        original_posts_for_count = session.get('all_posts_data', [])
         posts_count = {
-            'all': len(all_posts),
-            'free': sum(1 for p in all_posts if not p.get('premium_only', False)),
-            'premium': sum(1 for p in all_posts if p.get('premium_only', False))
+            'all': len(original_posts_for_count),
+            'free': sum(1 for p in original_posts_for_count if not p.get('premium_only', False)),
+            'premium': sum(1 for p in original_posts_for_count if p.get('premium_only', False))
         }
-        
+
         # 3. Paginação manual
-        per_page = 10
+        per_page = 10 # Posts per page on the /posts page
         total = len(filtered_posts)
-        
+
         # Calcular o número de páginas
-        total_pages = (total + per_page - 1) // per_page  # Arredondamento para cima
-        
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+
         # Ajustar a página atual se necessário
         page = min(max(1, page), max(1, total_pages))
-        
+
         # Calcular os índices de início e fim
         start_idx = (page - 1) * per_page
         end_idx = min(start_idx + per_page, total)
-        
+
         # Obter os posts da página atual
         paginated_posts = filtered_posts[start_idx:end_idx]
-        
-        # Criar objeto de paginação
-        pagination = {
+
+        # Criar objeto de paginação simplified
+        pagination_info = {
             'items': paginated_posts,
             'page': page,
             'per_page': per_page,
@@ -549,33 +579,42 @@ def all_posts():
             'has_next': page < total_pages,
             'prev_num': page - 1 if page > 1 else None,
             'next_num': page + 1 if page < total_pages else None,
-            'iter_pages': lambda left_edge=1, right_edge=1, left_current=2, right_current=2: 
-                          range(1, total_pages + 1) 
+            # Function to generate page numbers for display
+            'iter_pages': (lambda left_edge=1, right_edge=1, left_current=2, right_current=2:
+                            _calculate_page_numbers(page, total_pages, left_edge, right_edge, left_current, right_current))
         }
-        
-        # Criar classe para simular o objeto de paginação do SQLAlchemy
-        class DictToObject:
-            def __init__(self, d):
-                self.__dict__ = d
-                
-        pagination_obj = DictToObject(pagination)
-        
-        logger.info(f"Exibindo {len(paginated_posts)} posts (página {page}/{total_pages})")
-        
-        return render_template('public/all_posts.html', 
-                              posts=pagination_obj,
-                              active_filter=post_type,
-                              active_sort=sort_by,
-                              posts_count=posts_count,
-                              title="All Posts")
-                              
-    except requests.RequestException as e:
-        logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
-        abort(503, description="Could not fetch posts data.")
+
+        logger.info(f"Exibindo {len(paginated_posts)} posts (página {page}/{total_pages}) com filtro '{post_type}' e sort '{sort_by}'")
+
+        return render_template('public/all_posts.html',
+                               posts=pagination_info, # Pass pagination dict
+                               active_filter=post_type,
+                               active_sort=sort_by,
+                               posts_count=posts_count,
+                               title="All Posts")
+
     except Exception as e:
         logger.error(f"Erro inesperado na rota all_posts: {str(e)}")
         logger.error(traceback.format_exc())
-        abort(500, description="An unexpected error occurred.")
+        flash("Ocorreu um erro inesperado ao carregar os posts.", "danger")
+        return redirect(url_for('main.index'))
+
+# Helper for pagination numbers (needs to be defined or imported)
+from math import ceil
+
+def _calculate_page_numbers(current_page, total_pages, left_edge=1, right_edge=1, left_current=2, right_current=2):
+    last = 0
+    page_numbers = []
+    for num in range(1, total_pages + 1):
+        if num <= left_edge or \
+           (num > current_page - left_current - 1 and \
+            num < current_page + right_current + 1) or \
+           num > total_pages - right_edge:
+            if last + 1 != num:
+                page_numbers.append(None) # Represents ellipsis
+            page_numbers.append(num)
+            last = num
+    return page_numbers
 
 @main_bp.route('/coaching')
 def coaching():

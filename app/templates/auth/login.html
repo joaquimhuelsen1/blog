@@ -8,45 +8,60 @@
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-header text-center" style="background-color: #F1F1F1;">
-                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">Login</h4>
+                    <h4 class="mb-0" style="color: #000000; font-weight: 500;">
+                        {% if otp_sent %}Enter Login Code{% else %}Login{% endif %}
+                    </h4>
                 </div>
                 <div class="card-body">
                     {% include '_messages.html' %}
                     
-                    <form method="POST" action="{{ url_for('auth.login') }}">
-                        <!-- CSRF desativado para resolver erros -->
-                        
-                        <div class="form-group mb-3">
-                            {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control") }}
-                            {% for error in form.email.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            {{ form.password.label(class="form-label") }}
-                            {{ form.password(class="form-control") }}
-                            {% for error in form.password.errors %}
-                                <small class="text-danger">{{ error }}</small>
-                            {% endfor %}
-                            <div class="text-end mt-1">
-                                <a href="{{ url_for('auth.forgot_password') }}" class="text-muted small">Forgot my password</a>
+                    {% if otp_sent %}
+                        {# --- Show OTP Verification Form --- #}
+                        <p class="text-center mb-3">A login code has been sent to <strong>{{ email }}</strong>.</p>
+                        <form method="POST" action="{{ url_for('auth.login') }}">
+                            {{ otp_form.hidden_tag() if otp_form else '' }}
+                            <div class="form-group mb-3">
+                                {{ otp_form.otp.label(class="form-label") }}
+                                {{ otp_form.otp(class="form-control", autofocus=True) }}
+                                {% for error in otp_form.otp.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
                             </div>
+                            <div class="d-grid gap-2">
+                                {{ otp_form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
+                            </div>
+                        </form>
+                        <div class="text-center mt-3">
+                            <small><a href="{{ url_for('auth.login') }}">Cancel and use a different email</a></small>
+                            <br>
+                            <small><a href="#" id="resend-otp-link" class="text-muted disabled" style="pointer-events: none;">Resend Code</a> <span id="resend-timer" class="text-muted small"></span></small>
                         </div>
-                        
-                        <div class="form-check mb-3">
-                            {{ form.remember_me(class="form-check-input") }}
-                            {{ form.remember_me.label(class="form-check-label") }}
-                        </div>
-                        
-                        <div class="d-grid gap-2">
-                            {{ form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
-                        </div>
-                    </form>
+                    {% else %}
+                        {# --- Show Email Form --- #}
+                        <form method="POST" action="{{ url_for('auth.login') }}">
+                            {# {{ login_form.hidden_tag() if login_form else '' }} # Try explicit field instead #}
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/> {# EXPLICIT CSRF FIELD #}
+                            <div class="form-group mb-3">
+                                {{ login_form.email.label(class="form-label") }}
+                                {{ login_form.email(class="form-control", autofocus=True) }}
+                                {% for error in login_form.email.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                            {# --- Removed Password Field and Forgot Link --- #}
+                            {# <div class="form-group mb-3"> ... password field ... </div> #}
+                            {# <div class="form-check mb-3"> ... remember me ... </div> #}
+                            
+                            <div class="d-grid gap-2">
+                                {{ login_form.submit(class="btn btn-block", style="background-color: #C60000; color: white;") }}
+                            </div>
+                        </form>
+                    {% endif %}
                 </div>
                 <div class="card-footer">
+                    {% if not otp_sent %}
                     <p class="mb-0">Don't have an account? <a href="{{ url_for('auth.register') }}">Register here</a></p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -57,18 +72,104 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const formAction = "{{ url_for('auth.login') }}";
-    const loginForm = document.querySelector(`form[action="${formAction}"]`); 
-    if (loginForm) {
-        loginForm.addEventListener('submit', function(event) {
-            const submitButton = loginForm.querySelector('input[type="submit"]');
+    const currentForm = document.querySelector(`form[action="${formAction}"]`); 
+    if (currentForm) {
+        currentForm.addEventListener('submit', function(event) {
+            const submitButton = currentForm.querySelector('input[type="submit"], button[type="submit"]'); // Select both input and button
             if (submitButton && !submitButton.disabled) {
                 submitButton.disabled = true;
-                submitButton.value = 'Signing In...'; // Change button text
+                // Change text based on which form it is
+                if (document.getElementById('{{ login_form.email.id if login_form else "" }}')) { 
+                    submitButton.value = 'Sending Code...';
+                } else if (document.getElementById('{{ otp_form.otp.id if otp_form else "" }}')) {
+                    submitButton.textContent = 'Verifying...'; // Use textContent for button element
+                }
             } else {
                 // event.preventDefault(); // Prevent extra submits if already disabled
             }
         });
     }
+
+    // --- Resend OTP Logic ---
+    const resendLink = document.getElementById('resend-otp-link');
+    const timerSpan = document.getElementById('resend-timer');
+    const otpSent = {{ otp_sent|tojson }}; // Check if we are in OTP stage
+
+    if (resendLink && timerSpan && otpSent) {
+        let countdown = 90; // 90 seconds = 1 minute 30 seconds
+        let intervalId = null;
+
+        function updateTimer() {
+            if (countdown <= 0) {
+                clearInterval(intervalId);
+                timerSpan.textContent = '';
+                resendLink.classList.remove('disabled', 'text-muted');
+                resendLink.style.pointerEvents = 'auto';
+                resendLink.textContent = 'Resend Code'; // Reset text
+            } else {
+                timerSpan.textContent = `(wait ${countdown}s)`;
+                countdown--;
+            }
+        }
+
+        function startTimer() {
+            countdown = 90;
+            resendLink.classList.add('disabled', 'text-muted');
+            resendLink.style.pointerEvents = 'none';
+            resendLink.textContent = 'Resend Code'; // Keep text consistent
+            updateTimer(); // Update immediately
+            intervalId = setInterval(updateTimer, 1000);
+        }
+
+        resendLink.addEventListener('click', async (event) => {
+            event.preventDefault();
+            if (resendLink.classList.contains('disabled')) {
+                return; // Do nothing if disabled
+            }
+
+            resendLink.classList.add('disabled', 'text-muted');
+            resendLink.style.pointerEvents = 'none';
+            resendLink.textContent = 'Sending...'; // Indicate activity
+
+            try {
+                const response = await fetch("{{ url_for('auth.resend_otp') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': "{{ csrf_token() }}" // Include CSRF token
+                    },
+                    body: JSON.stringify({ context: 'login' }) // Specify context
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Use a subtle way to show success, maybe flash message?
+                    // For now, just restart timer
+                    alert('A new code has been sent.'); // Replace with flash message if possible
+                    startTimer();
+                } else {
+                    alert(data.message || 'Could not resend code. Please try again.');
+                    // Re-enable link immediately on failure
+                    resendLink.classList.remove('disabled', 'text-muted');
+                    resendLink.style.pointerEvents = 'auto';
+                    resendLink.textContent = 'Resend Code';
+                }
+            } catch (error) {
+                console.error('Error resending OTP:', error);
+                alert('An error occurred while trying to resend the code.');
+                 // Re-enable link immediately on failure
+                resendLink.classList.remove('disabled', 'text-muted');
+                resendLink.style.pointerEvents = 'auto';
+                resendLink.textContent = 'Resend Code';
+            }
+        });
+
+        // Start the timer when the page loads in OTP state
+        startTimer();
+    }
+    // --- End Resend OTP Logic ---
+
 });
 </script>
 {% endblock %}

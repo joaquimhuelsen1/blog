@@ -71,36 +71,16 @@
                 </div>
             {% endfor %}
             
-            <!-- Pagination -->
-            {% if posts.pagination %}
-            <nav aria-label="Page navigation">
-                <ul class="pagination">
-                    {% if posts.pagination.has_prev %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('main.index', page=posts.pagination.page-1) }}">Previous</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">Previous</span>
-                        </li>
-                    {% endif %}
-                    
-                    <li class="page-item active">
-                        <span class="page-link">{{ posts.pagination.page }}</span>
-                    </li>
-                    
-                    {% if posts.pagination.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('main.index', page=posts.pagination.page+1) }}">Next</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled">
-                            <span class="page-link">Next</span>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-            {% endif %}
+            {# --- REMOVE CONDITIONAL BUTTON LOGIC and ADD STATIC STYLED BUTTON --- #}
+            {# {% if show_all_posts_button %} #}
+            <div class="text-center mt-4 mb-4"> {# Added mb-4 for spacing #}
+                {# <a href="{{ url_for('main.all_posts') }}" class="btn btn-outline-secondary">View All Posts</a> # OLD BUTTON #}
+                {# <a href="/posts?type=all" class="btn btn-danger text-white">VER TODOS OS POSTS</a> # OLD STYLED BUTTON #}
+                 <a href="/posts?type=all" class="btn text-white btn-lg" style="background-color: #c60100;">VIEW ALL POSTS</a> {# NEW STYLED & SIZED BUTTON #}
+            </div>
+            {# {% endif %} #}
+            {# --------------------------------- #}
+            
         {% else %}
             <div class="alert alert-info">No articles published yet.</div>
         {% endif %}

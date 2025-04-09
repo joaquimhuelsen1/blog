@@ -10,9 +10,14 @@ class LoginForm(FlaskForm):
         csrf = False
         
     email = StringField('Email', validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[DataRequired()])
-    remember_me = BooleanField('Remember Me')
-    submit = SubmitField('Sign In')
+    submit = SubmitField('Send Login Code')
+
+class VerifyLoginForm(FlaskForm):
+    otp = StringField('Login Code', validators=[
+        DataRequired(), 
+        Length(min=6, max=6, message='The code must be 6 digits long.')
+    ])
+    submit = SubmitField('Verify and Log In')
 
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -65,8 +70,11 @@ class ProfileUpdateForm(FlaskForm):
     # Username and Email validation is skipped since the fields are readonly
 
 class CommentForm(FlaskForm):
-    content = TextAreaField('Comment', validators=[DataRequired(), Length(min=5, max=1000)])
-    submit = SubmitField('Submit Comment')
+    content = TextAreaField('Your Comment', validators=[
+        DataRequired(message="Comment cannot be empty."), 
+        Length(min=3, max=2000, message="Comment must be between 3 and 2000 characters.")
+    ], render_kw={"rows": 4, "placeholder": "Write your comment here..."})
+    submit = SubmitField('Post Comment')
 
 class ChatMessageForm(FlaskForm):
     message = TextAreaField('Your Message', validators=[DataRequired(), Length(min=2, max=1000)])
@@ -91,10 +99,6 @@ class VerifyOtpForm(FlaskForm):
         Length(min=6, max=6, message='The OTP code must be 6 digits long.')
     ])
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
-    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
-    confirm_password = PasswordField('Confirm Password', 
-                                 validators=[DataRequired(), 
-                                             EqualTo('password', message='Passwords must match.')])
     submit = SubmitField('Verify and Register')
     # Adicionar validações se o webhook não as fizer (ex: username já existe)
     # def validate_username(self, username):

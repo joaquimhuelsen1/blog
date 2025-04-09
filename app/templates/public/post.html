@@ -133,7 +133,7 @@
                                         </div>
                                         <div>
                                             <h5 class="card-title mb-0">{{ comment.author.username }}</h5>
-                                            <p class="text-muted small">{{ comment.created_at.strftime('%m/%d/%Y') }}</p>
+                                            <p class="text-muted small">{{ comment.created_at_formatted }}</p>
                                         </div>
                                     </div>
                                     <p class="card-text">{{ comment.content }}</p>
@@ -264,71 +264,110 @@
     
     document.addEventListener('DOMContentLoaded', function() {
         const commentForm = document.getElementById('comment-form');
-        const commentMessage = document.getElementById('comment-message');
         const submitButton = document.getElementById('submit-comment');
-        const spinner = submitButton ? submitButton.querySelector('.spinner-border') : null;
-        
-        // Hide message initially
-        if (commentMessage) {
-            commentMessage.style.display = 'none';
-        }
-        
-        if (commentForm && submitButton && spinner) {
-            commentForm.addEventListener('submit', function(e) {
-                e.preventDefault(); // Prevent default form submission
-                
-                // Check if button is already disabled
-                if (submitButton.disabled) {
-                    return; // Do nothing if already submitting
-                }
-                
+        const commentMessage = document.getElementById('comment-message');
+        const commentsList = document.querySelector('.comments-section .card-body').parentNode; // Get the container of comment cards
+        const noCommentsAlert = document.querySelector('.comments-section .alert-light');
+        const commentCounter = document.querySelector('.comments-section h3 .badge');
+
+        if (commentForm && submitButton) {
+            commentForm.addEventListener('submit', async function(event) {
+                event.preventDefault(); // Prevent traditional form submission
+
                 // Disable button and show spinner
                 submitButton.disabled = true;
-                spinner.classList.remove('d-none');
-                commentMessage.style.display = 'none'; // Hide previous messages
-                
+                const originalButtonText = submitButton.innerHTML;
+                submitButton.innerHTML = `
+                    Posting...
+                    <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>
+                `;
+                commentMessage.style.display = 'none';
+                commentMessage.textContent = '';
+                commentMessage.className = 'mt-2'; // Reset classes
+
                 const formData = new FormData(commentForm);
-                
-                fetch(commentForm.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                        // CSRF token might be needed depending on your setup, handled by hidden_tag usually
-                    },
-                    // credentials: 'same-origin' // Removed, may cause issues if backend origin differs
-                })
-                .then(response => response.json().then(data => ({ status: response.status, body: data })))
-                .then(({ status, body }) => {
-                    commentMessage.textContent = body.message; // Use message from JSON response
-                    
-                    if (body.success) {
-                        commentMessage.className = 'alert alert-success mt-2';
-                        commentForm.reset(); // Clear form on success
-                        // Keep button disabled and spinner showing briefly? Or re-enable?
-                        // For now, re-enable immediately after success message shown
-                        submitButton.disabled = false;
-                        spinner.classList.add('d-none');
+                const postUrl = commentForm.action;
+
+                try {
+                    const response = await fetch(postUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            // FormData sets Content-Type automatically, but we need CSRF
+                            'X-CSRFToken': formData.get('csrf_token') // Get CSRF token from form data
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success && data.comment) {
+                        // Success!
+                        commentMessage.textContent = 'Comment posted successfully!';
+                        commentMessage.classList.add('text-success');
+                        commentForm.reset(); // Clear the form
+
+                        // --- Add the new comment dynamically --- 
+                        const newComment = data.comment;
+                        const commentElement = document.createElement('div');
+                        commentElement.classList.add('card', 'mb-3');
+                        commentElement.innerHTML = `
+                            <div class="card-body">
+                                <div class="d-flex mb-2">
+                                    <div class="me-3">
+                                        <i class="fas fa-user fa-2x"></i> 
+                                    </div>
+                                    <div>
+                                        <h5 class="card-title mb-0">${newComment.author.username}</h5>
+                                        <p class="text-muted small">${newComment.created_at_formatted || 'Just now'}</p>
+                                    </div>
+                                </div>
+                                <p class="card-text">${escapeHtml(newComment.content)}</p> {# Escape content #}
+                            </div>
+                        `;
+                        
+                        // Insert the new comment at the beginning of the list
+                        if (noCommentsAlert) {
+                             noCommentsAlert.remove(); // Remove "No comments yet" message
+                        }
+                        commentsList.insertBefore(commentElement, commentsList.children[1]); // Insert after the form card
+                        
+                        // Update comment counter
+                        if(commentCounter) {
+                            const currentCount = parseInt(commentCounter.textContent || '0', 10);
+                            commentCounter.textContent = currentCount + 1;
+                        }
+                        // --- End adding comment --- 
+
                     } else {
-                        // Handle business logic errors (e.g., validation fail on backend)
-                        commentMessage.className = 'alert alert-danger mt-2';
-                        // Re-enable button on failure so user can retry
-                        submitButton.disabled = false;
-                        spinner.classList.add('d-none');
+                        // Error from server
+                        commentMessage.textContent = data.message || 'Failed to post comment.';
+                        commentMessage.classList.add('text-danger');
                     }
-                    commentMessage.style.display = 'block'; // Show message
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    commentMessage.textContent = 'An error occurred while submitting your comment. Please check your connection and try again.';
-                    commentMessage.className = 'alert alert-danger mt-2';
-                    commentMessage.style.display = 'block';
-                    // Re-enable button on network/fetch error
+
+                } catch (error) {
+                    console.error('Error submitting comment:', error);
+                    commentMessage.textContent = 'An unexpected error occurred. Please try again.';
+                    commentMessage.classList.add('text-danger');
+                } finally {
+                    // Re-enable button and restore text
                     submitButton.disabled = false;
-                    spinner.classList.add('d-none');
-                });
+                    submitButton.innerHTML = originalButtonText;
+                    commentMessage.style.display = 'block'; // Show message area
+                }
             });
         }
+        
+        // Helper function to escape HTML (simple version)
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+         }
+
     });
 </script>
 {% endblock %} 

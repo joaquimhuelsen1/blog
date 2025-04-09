@@ -114,8 +114,10 @@
 
     <!-- Post Listing -->
     <div class="row">
-        {% if posts.items %}
-            {% for post in posts.items %}
+        {# Check if the 'items' list within the 'posts' dict is not empty using bracket notation #}
+        {% if posts['items'] and posts['items']|length > 0 %}
+            {# Iterate over the actual list of posts stored in the 'items' key using bracket notation #}
+            {% for post in posts['items'] %}
                 <div class="col-lg-4 col-md-6 mb-4">
                     <div class="card h-100 {% if post.premium_only %}border-warning{% endif %}">
                         <img src="{{ post.image_url }}" class="card-img-top" alt="{{ post.title }}" style="height: 200px; object-fit: cover;" onerror="this.onerror=null;this.src='https://via.placeholder.com/800x300?text=Image+Unavailable';">
