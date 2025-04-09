@@ -4,13 +4,14 @@ from flask_login import login_required, current_user
 # from app.models import User, Post, Comment # Remover Post e Comment
 from app.models import User # Manter apenas User
 from app.forms import PostForm, UserUpdateForm
-from app.utils import upload_image_to_supabase
+# from app.utils import upload_image_to_supabase # REMOVIDO
 from functools import wraps
 import os
 import requests
 import logging
 from datetime import datetime
 from dateutil import parser
+import traceback
 
 # Configurar logging
 logging.basicConfig(
@@ -294,54 +295,64 @@ def create_post():
     
     if form.validate_on_submit():
         try:
-            # Processar upload de imagem se houver
-            image_url = form.image_url.data
-            
-            if form.image.data:
-                try:
-                    image_url = upload_image_to_supabase(form.image.data)
-                except Exception as e:
-                    flash(f'Erro ao fazer upload da imagem: {str(e)}', 'danger')
+            # webhook_url = os.environ.get('WEBHOOK_MANAGE_POST') # Usar novo webhook unificado
+            webhook_url = os.environ.get('WEBHOOK_CREATE_POST') # Usar webhook de criação
+            if not webhook_url:
+                # flash('Webhook para gerenciar posts não configurado', 'danger')
+                flash('Webhook para CRIAR posts não configurado (WEBHOOK_CREATE_POST)', 'danger')
                     return render_template('admin/create_post.html', form=form)
             
-            # Preparar dados do post para o webhook
-            post_data = {
-                'title': form.title.data,
-                'content': form.content.data,
-                'summary': form.summary.data,
-                'image_url': image_url or 'https://via.placeholder.com/1200x400',
-                'reading_time': form.reading_time.data,
-                'premium_only': form.premium_only.data,
-                'status': form.status.data,
-                'type_content': form.type_content.data,
-                'notion_url': form.notion_url.data,
-                'author_id': str(current_user.id),
-                'author_username': current_user.username
-            }
-
-            if form.created_at.data:
-                post_data['created_at'] = form.created_at.data.isoformat()
+            # Usar FormData para enviar campos e arquivo opcional
+            form_data = {}
+            # Coletar dados do formulário (exceto CSRF e imagem)
+            for field in form:
+                 if field.name not in ['csrf_token', 'image', 'submit']:
+                     # Tratar data/hora para formato ISO
+                     if isinstance(field.data, datetime):
+                         form_data[field.name] = field.data.isoformat()
+                     # Tratar booleanos como string 'true'/'false' se necessário pelo webhook
+                     elif isinstance(field.data, bool):
+                         form_data[field.name] = str(field.data).lower()
+                     elif field.data is not None: # Enviar outros campos não nulos
+                         form_data[field.name] = field.data
             
-            # Enviar para o webhook do N8N
-            webhook_url = os.environ.get('WEBHOOK_CREATE_POST')
-            if not webhook_url:
-                flash('URL do webhook não configurada', 'danger')
-                return render_template('admin/create_post.html', form=form)
-
+            # Adicionar autor e evento
+            form_data['event'] = 'create_post' # Identifica a ação no webhook
+            form_data['author_id'] = str(current_user.id)
+            form_data['author_username'] = current_user.username
+            
+            # Preparar arquivos para envio
+            files = {}
+            if form.image.data:
+                files['image'] = (form.image.data.filename, form.image.data.stream, form.image.data.content_type)
+                logger.info(f"Preparando para enviar imagem: {form.image.data.filename}")
+            else:
+                 logger.info("Nenhuma nova imagem enviada.")
+                 # Se não há imagem nova, garantir que image_url (se existir) seja enviado
+                 if form.image_url.data:
+                     form_data['image_url'] = form.image_url.data
+            
+            logger.info(f"Enviando dados para {webhook_url}: {form_data}")
+            # Enviar como multipart/form-data (requests faz isso automaticamente com `files`)
             response = requests.post(
                 webhook_url,
-                json=post_data,
-                timeout=10
+                data=form_data, # Usar data para campos
+                files=files,    # Usar files para o arquivo
+                timeout=30 # Aumentar timeout para uploads
             )
-            response.raise_for_status()  # Vai lançar exceção para status codes de erro
+            response.raise_for_status() 
             
             # Verificar resposta do webhook
             response_data = response.json()
-            if response_data.get('response') == 'success':
+            logger.info(f"Resposta do webhook CREATE_POST: {response_data}")
+            # Ajustar verificação de sucesso conforme a resposta real do webhook
+            if isinstance(response_data, dict) and response_data.get('success'):
                 flash('Post criado com sucesso!', 'success')
+                session.pop('admin_posts', None) # Limpar cache da sessão
                 return redirect(url_for('admin.dashboard'))
             else:
-                flash('Erro ao criar post: Resposta inválida do webhook', 'danger')
+                error_msg = response_data.get('message', 'Resposta inválida do webhook') if isinstance(response_data, dict) else 'Resposta inválida do webhook'
+                flash(f'Erro ao criar post: {error_msg}', 'danger')
                 return render_template('admin/create_post.html', form=form)
             
         except requests.RequestException as e:
@@ -388,7 +399,7 @@ def edit_post(post_id):
         response_data = response.json()
         logger.info(f"Resposta do webhook: {response_data}")
         post_data = response_data.get('post')
-
+             
         if not post_data:
             flash('Post not found.', 'danger')
             return redirect(url_for('admin.all_posts'))
@@ -417,7 +428,82 @@ def edit_post(post_id):
         flash('An unexpected error occurred while loading the post.', 'danger')
         return redirect(url_for('admin.all_posts'))
         
-    # Renderizar o template com o formulário populado
+    # --- INÍCIO DO PROCESSAMENTO DO POST --- 
+    if form.validate_on_submit(): # Processar POST request
+        try:
+            # webhook_url = os.environ.get('WEBHOOK_MANAGE_POST') # Usar novo webhook unificado
+            webhook_url = os.environ.get('WEBHOOK_ADMIN_POST') # Usar webhook de admin/edição
+            if not webhook_url:
+                # flash('Webhook para gerenciar posts não configurado', 'danger')
+                flash('Webhook para EDITAR posts não configurado (WEBHOOK_ADMIN_POST)', 'danger')
+                return render_template('admin/edit_post.html', form=form, post_id=post_id)
+
+            # Usar FormData para enviar campos e arquivo opcional
+            form_data = {}
+            # Coletar dados do formulário (exceto CSRF e imagem)
+            for field in form:
+                 if field.name not in ['csrf_token', 'image', 'submit']:
+                     # Tratar data/hora para formato ISO
+                     if isinstance(field.data, datetime):
+                         form_data[field.name] = field.data.isoformat()
+                     # Tratar booleanos como string 'true'/'false' se necessário pelo webhook
+                     elif isinstance(field.data, bool):
+                         form_data[field.name] = str(field.data).lower()
+                     elif field.data is not None: # Enviar outros campos não nulos
+                         form_data[field.name] = field.data
+            
+            # Adicionar ID do post e evento
+            form_data['event'] = 'update_post' # Identifica a ação no webhook
+            form_data['post_id'] = str(post_id) 
+            form_data['author_id'] = str(current_user.id) # Pode ser útil para permissões
+            
+            # Preparar arquivos para envio
+            files = {}
+            if form.image.data:
+                files['image'] = (form.image.data.filename, form.image.data.stream, form.image.data.content_type)
+                logger.info(f"Preparando para enviar nova imagem: {form.image.data.filename}")
+            else:
+                 logger.info("Nenhuma nova imagem enviada para atualização.")
+                 # Se não há imagem nova, garantir que image_url (se existir no form) seja enviado
+                 if form.image_url.data:
+                     form_data['image_url'] = form.image_url.data
+                 # Se nem image_url foi preenchido, o webhook deve manter a imagem antiga
+            
+            logger.info(f"Enviando dados de ATUALIZAÇÃO para {webhook_url}: {form_data}")
+            # Enviar como multipart/form-data
+            response = requests.post(
+                webhook_url,
+                data=form_data, 
+                files=files,    
+                timeout=30 
+            )
+            response.raise_for_status() 
+            
+            # Verificar resposta do webhook
+            response_data = response.json()
+            logger.info(f"Resposta do webhook ADMIN_POST (Update): {response_data}")
+            if isinstance(response_data, dict) and response_data.get('success'):
+                flash('Post atualizado com sucesso!', 'success')
+                session.pop('admin_posts', None) # Limpar cache da sessão
+                return redirect(url_for('admin.all_posts'))
+            else:
+                error_msg = response_data.get('message', 'Resposta inválida do webhook') if isinstance(response_data, dict) else 'Resposta inválida do webhook'
+                flash(f'Erro ao atualizar post: {error_msg}', 'danger')
+                # Renderizar de novo o form com os dados submetidos (e erros, se houver)
+                return render_template('admin/edit_post.html', form=form, post_id=post_id)
+        
+    except requests.RequestException as e:
+             logger.error(f"Erro de rede ao ATUALIZAR post via webhook: {e}")
+             flash('Erro de rede ao salvar alterações.', 'danger')
+    except Exception as e:
+             logger.error(f"Erro inesperado ao ATUALIZAR post: {e}")
+             logger.error(traceback.format_exc()) # Log completo para erros inesperados
+             flash('Erro inesperado ao salvar alterações.', 'danger')
+        # Se validate_on_submit falhou ou ocorreu erro, renderiza o form novamente
+        return render_template('admin/edit_post.html', form=form, post_id=post_id)
+    # --- FIM DO PROCESSAMENTO DO POST --- 
+    
+    # Renderizar o template com o formulário populado (no GET request)
     return render_template('admin/edit_post.html', form=form, post_id=post_id)
 
 @admin_bp.route('/post/delete/<uuid:post_id>', methods=['POST'])
