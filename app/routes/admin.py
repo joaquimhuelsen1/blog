@@ -300,7 +300,7 @@ def create_post():
             if not webhook_url:
                 # flash('Webhook para gerenciar posts não configurado', 'danger')
                 flash('Webhook para CRIAR posts não configurado (WEBHOOK_CREATE_POST)', 'danger')
-                    return render_template('admin/create_post.html', form=form)
+                return render_template('admin/create_post.html', form=form)
             
             # Usar FormData para enviar campos e arquivo opcional
             form_data = {}
@@ -492,10 +492,10 @@ def edit_post(post_id):
                 # Renderizar de novo o form com os dados submetidos (e erros, se houver)
                 return render_template('admin/edit_post.html', form=form, post_id=post_id)
         
-    except requests.RequestException as e:
+        except requests.RequestException as e:
              logger.error(f"Erro de rede ao ATUALIZAR post via webhook: {e}")
              flash('Erro de rede ao salvar alterações.', 'danger')
-    except Exception as e:
+        except Exception as e:
              logger.error(f"Erro inesperado ao ATUALIZAR post: {e}")
              logger.error(traceback.format_exc()) # Log completo para erros inesperados
              flash('Erro inesperado ao salvar alterações.', 'danger')
@@ -503,7 +503,7 @@ def edit_post(post_id):
         return render_template('admin/edit_post.html', form=form, post_id=post_id)
     # --- FIM DO PROCESSAMENTO DO POST --- 
     
-    # Renderizar o template com o formulário populado (no GET request)
+    # Renderizar o template com o formulário populado (no GET request ou se POST falhou ANTES do try)
     return render_template('admin/edit_post.html', form=form, post_id=post_id)
 
 @admin_bp.route('/post/delete/<uuid:post_id>', methods=['POST'])
