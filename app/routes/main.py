@@ -227,7 +227,7 @@ def post(post_id):
                 space_index = full_content.rfind(' ', max(0, estimated_cutoff - 100), estimated_cutoff)
                 if space_index != -1:
                     preview_cutoff = space_index
-        else:
+                else:
                     # If no space, look for newline
                     newline_index = full_content.rfind('\n', max(0, estimated_cutoff - 200), estimated_cutoff)
                     if newline_index != -1:
@@ -457,50 +457,50 @@ def all_posts():
             try:
             # Fazer requisição para o webhook
                 response = requests.post(webhook_url, json=webhook_data, timeout=20) # Longer timeout
-            response.raise_for_status()
-            
-            # Processar resposta
-            data = response.json()
+                response.raise_for_status()
+
+                # Processar resposta
+                data = response.json()
 
                 # Check response structure (expecting dict with 'posts')
                 if not isinstance(data, dict) or 'posts' not in data:
-                     logger.error(f"Estrutura inesperada da resposta do webhook para all_posts: {data}")
-                     raise ValueError("Formato de resposta inválido do webhook")
+                    logger.error(f"Estrutura inesperada da resposta do webhook para all_posts: {data}")
+                    raise ValueError("Formato de resposta inválido do webhook")
 
-            logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
-            
-            # Extrair e processar posts
+                logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
+
+                # Extrair e processar posts
                 all_posts_data = data.get('posts', [])
-            
-            # Verificar se posts_data é um dicionário único ou uma lista
+
+                # Verificar se posts_data é um dicionário único ou uma lista
                 if isinstance(all_posts_data, dict):
                     all_posts_data = [all_posts_data]  # Converte para lista com um item
-            
-            # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
+
+                # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
                 for post in all_posts_data:
-                if 'created_at' in post and post['created_at']:
-                    try:
+                    if 'created_at' in post and post['created_at']:
+                        try:
                             # Guardar o objeto datetime para ordenação E a string formatada
-                        created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+                            created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
                             post['created_at_dt'] = created_dt
                             post['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
-                    except (ValueError, AttributeError):
-                        post['created_at_formatted'] = 'Data não disponível'
+                        except (ValueError, AttributeError):
+                            post['created_at_formatted'] = 'Data não disponível'
                             post['created_at_dt'] = datetime.min.replace(tzinfo=timezone.utc) # Fallback for sorting
-                        
-            # Armazenar na sessão com timestamp
+
+                # Armazenar na sessão com timestamp
                 session['all_posts_data'] = all_posts_data
-            session['all_posts_timestamp'] = datetime.now().timestamp()
+                session['all_posts_timestamp'] = datetime.now().timestamp()
                 logger.info(f"Posts armazenados na sessão: {len(all_posts_data)}")
 
             except requests.RequestException as e:
-                 logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
-                 flash("Não foi possível buscar os posts. Tente novamente mais tarde.", "danger")
-                 return redirect(url_for('main.index'))
+                logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
+                flash("Não foi possível buscar os posts. Tente novamente mais tarde.", "danger")
+                return redirect(url_for('main.index'))
             except ValueError as e:
-                 logger.error(f"Erro ao processar resposta do webhook: {str(e)}")
-                 flash("Erro ao processar dados dos posts.", "danger")
-                 return redirect(url_for('main.index'))
+                logger.error(f"Erro ao processar resposta do webhook: {str(e)}")
+                flash("Erro ao processar dados dos posts.", "danger")
+                return redirect(url_for('main.index'))
         else:
             logger.info(f"Usando posts da sessão: {len(all_posts_data)}")
             
@@ -513,12 +513,12 @@ def all_posts():
         elif post_type == 'premium':
             # Ensure only authenticated premium users see premium posts here too
             if current_user.is_authenticated and current_user.is_premium:
-            filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
+                filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
             else:
                  # If non-premium user tries to filter for premium, show nothing or redirect?
                  # Showing nothing is safer.
-                 filtered_posts = []
-                 flash("You need to be a premium member to view premium posts.", "warning")
+                filtered_posts = []
+                flash("You need to be a premium member to view premium posts.", "warning")
 
             
         # 2. Ordenar

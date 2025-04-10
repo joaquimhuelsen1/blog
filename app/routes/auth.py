@@ -47,9 +47,9 @@ def is_safe_url(target):
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     # Redirect if already logged in
-        if current_user.is_authenticated:
-            return redirect(url_for('main.index'))
-        
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
     # Determine if we are in the OTP verification stage
     email_for_otp = session.get('email_for_login_otp')
     otp_sent = bool(email_for_otp)
@@ -60,10 +60,10 @@ def login():
 
     # --- Handle POST requests (both email submission and OTP verification) --- 
     if request.method == 'POST':
-        
+
         # Determine which form was submitted based on otp_sent status from session
         current_otp_sent = bool(session.get('email_for_login_otp'))
-        
+
         if not current_otp_sent:
             # --- STAGE 1: Process Email Submission --- 
             submitted_login_form = LoginForm(request.form)
@@ -79,7 +79,7 @@ def login():
                     logger.error("WEBHOOK_RESENDOTP (for initial login OTP request) not configured")
                     flash('Server configuration error. Cannot send login code.', 'danger')
                     return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
-                
+
                 try:
                     # payload = {'email': email, 'event': 'request_login_otp'} # OLD PAYLOAD
                     payload = {'email': email, 'event': 'request_otp'} # NEW PAYLOAD (consistent with resend)
@@ -87,7 +87,7 @@ def login():
                     response = requests.post(webhook_url, json=payload, timeout=10)
                     response.raise_for_status()
                     response_data = response.json()
-                    
+
                     # --- ADJUSTED RESPONSE CHECK FOR STAGE 1 --- 
                     is_success = False
                     # Case 1: Response is like [{'status': 'success'}]
@@ -95,8 +95,8 @@ def login():
                         is_success = True
                     # Case 2: Response is like {'success': True} OR {'status': 'success'}
                     elif isinstance(response_data, dict) and (response_data.get('success') or response_data.get('status') == 'success'):
-                         is_success = True
-                         
+                            is_success = True
+
                     if is_success:
                     # if isinstance(response_data, dict) and response_data.get('success'): # OLD CHECK
                         logger.info(f"Login OTP sent successfully to {email}")
@@ -119,26 +119,26 @@ def login():
                         elif isinstance(response_data, dict):
                             error_message = response_data.get('message', error_message)
                         elif isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
-                             error_message = response_data[0].get('message', error_message)
+                                error_message = response_data[0].get('message', error_message)
                         # --- END CUSTOM ERROR HANDLING --- 
-                        
+
                         # error_msg = response_data.get('message', 'Could not send login code. Is the email registered?') if isinstance(response_data, dict) else 'Failed to send login code.' # OLD ERROR MSG
                         logger.warning(f"Failed to send login OTP for {email}: Response={response_data}") # Log the actual response
                         flash(error_message, 'danger')
-                
+
                 except requests.RequestException as e:
                     logger.error(f"Network error requesting login OTP: {e}")
                     flash('Network error. Could not send login code.', 'danger')
                 except Exception as e:
                     logger.error(f"Unexpected error requesting login OTP: {e}")
                     flash('An unexpected error occurred.', 'danger')
-                
+
                 # Fallthrough: re-render email form on failure
                 return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
             else:
                 # Form validation failed for email form
-                 logger.warning(f"Login form (Stage 1) validation failed: {submitted_login_form.errors}")
-                 return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
+                    logger.warning(f"Login form (Stage 1) validation failed: {submitted_login_form.errors}")
+                    return render_template('auth/login.html', login_form=submitted_login_form, otp_sent=False)
 
         else: # current_otp_sent is True
             # --- STAGE 2: Process OTP Verification --- 
@@ -146,12 +146,12 @@ def login():
             if submitted_otp_form.validate_on_submit():
                 otp_code = submitted_otp_form.otp.data
                 email = session.get('email_for_login_otp') # Get email from session
-                
+
                 if not email:
-                     flash('Session expired. Please enter your email again.', 'warning')
-                     session.pop('email_for_login_otp', None)
-                     return redirect(url_for('auth.login'))
-                     
+                        flash('Session expired. Please enter your email again.', 'warning')
+                        session.pop('email_for_login_otp', None)
+                        return redirect(url_for('auth.login'))
+
                 webhook_url = os.environ.get('WEBHOOK_AUTHENTICATE_OTP') # USE THIS WEBHOOK FOR VERIFICATION
                 if not webhook_url:
                     logger.error("WEBHOOK_AUTHENTICATE_OTP not configured")
@@ -165,12 +165,12 @@ def login():
                     response = requests.post(webhook_url, json=payload, timeout=10)
                     response.raise_for_status()
                     response_data = response.json()
-                    
+
                     # --- ADJUSTED RESPONSE HANDLING (v2) --- 
                     user_info = None
                     # Case 1: Response is a list containing a user dictionary
                     if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
-                        user_info = response_data[0] 
+                        user_info = response_data[0]
                         logger.info(f"Webhook returned user data (list format) successfully for login: {email}")
                     # Case 2: Response is a direct user dictionary (check for presence of 'id')
                     elif isinstance(response_data, dict):
@@ -181,7 +181,7 @@ def login():
                         if retrieved_id: # Check if the retrieved ID is truthy
                             user_info = response_data
                             logger.info(f"Webhook returned user data (dict format) successfully for login: {email}")
-                    
+
                     # Check if we got the user info dictionary from either case
                     if user_info:
                         # --- Extract User data from the dictionary (user_info) --- 
@@ -201,12 +201,12 @@ def login():
                         auth_id = user_info.get('auth-id') # Key might be 'auth-id'
                         access_token = user_info.get('access_token')
                         refresh_token = user_info.get('refresh_token')
-                        
-                            if not user_id:
-                             logger.error(f"Webhook success but missing user ID for {email}")
-                             flash('Login failed: Invalid user data received.', 'danger')
-                             return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
-                             
+
+                        if not user_id:
+                            logger.error(f"Webhook success but missing user ID for {email}")
+                            flash('Login failed: Invalid user data received.', 'danger')
+                            return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+
                         flask_user = User(
                                 id=user_id,
                             email=user_email,
@@ -216,54 +216,61 @@ def login():
                             age=user_age,
                             ai_credits=user_ai_credits
                         )
-                        login_user(flask_user, remember=True) 
+                        login_user(flask_user, remember=True)
                         logger.info(f"OTP Login successful for {email}")
                         session.pop('email_for_login_otp', None)
-                        
+
                         # Store user data in session (optional but can be useful)
-                            session['user_data'] = {
-                             'id': str(flask_user.id),
-                             'username': flask_user.username,
-                             'email': flask_user.email,
-                             'is_admin': flask_user.is_admin,
-                             'is_premium': flask_user.is_premium,
-                             'age': flask_user.age,
-                             'ai_credits': flask_user.ai_credits,
-                             'auth_id': auth_id
+                        session['user_data'] = {
+                                'id': str(flask_user.id),
+                                'username': flask_user.username,
+                                'email': flask_user.email,
+                                'is_admin': flask_user.is_admin,
+                                'is_premium': flask_user.is_premium,
+                                'age': flask_user.age,
+                                'ai_credits': flask_user.ai_credits,
+                                'auth_id': auth_id
                         }
                         session.modified = True
-                        
+
                         # Redirect
                         next_page = session.pop('next_url', None)
                         if not next_page or not is_safe_url(next_page):
                                 next_page = url_for('main.index')
-                            return redirect(next_page)
+                        logger.info(f"Redirecting user {email} to {next_page}")
+                        return redirect(next_page)
                     else:
-                        logger.warning(f"Failed OTP verification for {email}. Webhook response did not contain expected user data. Response: {response_data}")
-                        flash('Invalid login code or verification failed.', 'danger')
-                        # Re-render OTP form with errors
-                        return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
-                
+                        # Login failed - OTP verification failed
+                        error_msg = 'Invalid login code or email.'
+                        if isinstance(response_data, dict):
+                            error_msg = response_data.get('message', error_msg)
+                        elif isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                                error_msg = response_data[0].get('message', error_msg)
+                        logger.warning(f"Login OTP verification failed for {email}: Response={response_data}")
+                        flash(error_msg, 'danger')
+
                 except requests.RequestException as e:
                     logger.error(f"Network error verifying login OTP: {e}")
                     flash('Network error. Could not verify login code.', 'danger')
-                    return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
-            except Exception as e:
+                except Exception as e:
                     logger.error(f"Unexpected error verifying login OTP: {e}")
                     flash('An unexpected error occurred.', 'danger')
-                    return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
+
+                # Fallthrough: re-render OTP form on failure
+                return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
             else:
                 # Form validation failed for OTP form
-                logger.warning(f"OTP form (Stage 2) validation failed: {submitted_otp_form.errors}")
-                return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=session.get('email_for_login_otp')) # Pass email back
+                logger.warning(f"Login form (Stage 2 - OTP) validation failed: {submitted_otp_form.errors}")
+                email = session.get('email_for_login_otp') # Need email for re-rendering
+                return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
 
-    # --- Handle GET requests --- 
-    if otp_sent:
-        # If GET request but OTP was already sent (e.g., page refresh), show OTP form again
-        return render_template('auth/login.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
-    else:
-        # Standard GET request, show email form
-        return render_template('auth/login.html', login_form=login_form, otp_sent=False)
+        # --- Handle GET requests --- 
+        if otp_sent:
+            # Show OTP form if email is in session
+            return render_template('auth/login.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
+        else:
+            # Show email form
+            return render_template('auth/login.html', login_form=login_form, otp_sent=False)
 
 @auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
@@ -280,9 +287,9 @@ def logout():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-        if current_user.is_authenticated:
-            return redirect(url_for('main.index'))
-        
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
     # Determine stage: email entry or OTP verification?
     email_for_otp = session.get('email_for_registration_otp')
     otp_sent = bool(email_for_otp)
@@ -300,7 +307,7 @@ def register():
             email = email.lower() # Convert email to lowercase
             logger.info(f"Processing registration request for email: {email}") # Log lowercase email
             webhook_url = os.environ.get('WEBHOOK_REGISTRATION') # Webhook to request OTP
-                if not webhook_url:
+            if not webhook_url:
                 logger.error("WEBHOOK_REGISTRATION (for OTP request) not configured")
                 flash('Server configuration error. Cannot send verification code.', 'danger')
                 return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
@@ -398,7 +405,7 @@ def register():
                 logger.info(f"Verifying registration OTP and username for {email} via {webhook_url}")
                 response = requests.post(webhook_url, json=payload, timeout=15)
                 response.raise_for_status()
-                        response_data = response.json()
+                response_data = response.json()
                 logger.info(f"Response from WEBHOOK_AUTHENTICATE_OTP (verify_registration_otp): {response_data}")
                 
                 # --- ADJUSTED RESPONSE HANDLING (v2) --- 
@@ -408,7 +415,7 @@ def register():
                     user_info = response_data[0] 
                     logger.info(f"Webhook returned user data (list format) successfully for registration: {email}")
                 # Case 2: Response is a direct user dictionary (check for presence of 'id')
-                        elif isinstance(response_data, dict):
+                elif isinstance(response_data, dict):
                     # --- ADD EXTRA LOGGING --- 
                     retrieved_id = response_data.get('id')
                     logger.info(f"Checking dict response: found 'id'? Type={type(retrieved_id)}, Value='{retrieved_id}'")
