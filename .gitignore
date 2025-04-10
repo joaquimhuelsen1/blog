@@ -40,6 +40,8 @@ flask_session/
 
 # Logs
 *.log
+logs/
+app/data/
 
 # Database
 *.db
