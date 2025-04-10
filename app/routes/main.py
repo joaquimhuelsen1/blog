@@ -53,7 +53,7 @@ def index():
             'event': 'get_all_posts',
             'page': 1,
             'per_page': 5,
-            'is_premium': current_user.is_authenticated and current_user.is_premium
+            'is_premium': current_user.is_authenticated and current_user.is_premium 
         }
         logger.info(f"Enviando para webhook get_all_posts (index): {webhook_data}")
         
@@ -95,14 +95,14 @@ def index():
             
             logger.info(f"Posts processados para index: {len(posts_list)}")
             
-            return render_template('public/index.html',
+            return render_template('public/index.html', 
                                 posts=formatted_data,
                                 show_all_posts_button=True,
                                 now=datetime.utcnow())
                                 
         except requests.RequestException as e:
             logger.error(f"Erro ao fazer requisição para o webhook: {str(e)}")
-            return render_template('public/index.html',
+            return render_template('public/index.html', 
                                 posts={'posts': []},
                                 show_all_posts_button=False,
                                 now=datetime.utcnow())
@@ -116,7 +116,7 @@ def index():
     except Exception as e:
         logger.error(f"Erro na rota index: {str(e)}")
         logger.error(traceback.format_exc())
-        return render_template('public/index.html',
+        return render_template('public/index.html', 
                             posts={'posts': []},
                             show_all_posts_button=False,
                             now=datetime.utcnow())
@@ -181,7 +181,7 @@ def post(post_id):
              comments_data.append(comment)
         
         # Processar o post principal (slightly adjusted for new structure)
-        post_obj = SimpleNamespace(**post_data) 
+        post_obj = SimpleNamespace(**post_data)
         # post_obj.created_at_formatted = 'Data não disponível' # Defined below
         if hasattr(post_obj, 'created_at') and isinstance(post_obj.created_at, str):
              try:
@@ -227,7 +227,7 @@ def post(post_id):
                 space_index = full_content.rfind(' ', max(0, estimated_cutoff - 100), estimated_cutoff)
                 if space_index != -1:
                     preview_cutoff = space_index
-                else:
+        else:
                     # If no space, look for newline
                     newline_index = full_content.rfind('\n', max(0, estimated_cutoff - 200), estimated_cutoff)
                     if newline_index != -1:
@@ -421,76 +421,76 @@ def all_posts():
     """
     try:
         logger.info(f"Acessando lista de posts")
-
+        
         # Parâmetros da URL
         page = request.args.get('page', 1, type=int)
         post_type = request.args.get('type', 'all')  # all, free, premium
         sort_by = request.args.get('sort', 'recent')  # recent, read_time_asc, read_time_desc
-
+        
         logger.info(f"Parâmetros: page={page}, type={post_type}, sort={sort_by}")
-
+        
         # Verificar se já temos os posts na sessão (para evitar chamadas repetidas)
         all_posts_data = session.get('all_posts_data')
-
+        
         # Se não temos os posts ou se passaram mais de 5 minutos, buscar novamente
         refresh_posts = all_posts_data is None or session.get('all_posts_timestamp', 0) < (datetime.now().timestamp() - 300)
-
+        
         if refresh_posts:
             logger.info("Posts não encontrados na sessão ou cache expirado. Buscando do webhook...")
-
+            
             # Preparar dados para o webhook (simplificado - apenas um evento)
             webhook_url = os.environ.get('WEBHOOK_GET_POSTS')
             if not webhook_url:
                 logger.error("WEBHOOK_GET_POSTS não configurado no .env")
                 flash("Erro de configuração do servidor.", "danger")
                 return redirect(url_for('main.index'))
-
+                
             webhook_data = {
                 'event': 'get_all_posts',  # Mesmo evento usado na home
                 'page': 1,                 # Página 1
                 'per_page': 1000,          # Limite alto para trazer todos (webhook needs to support this)
                 'is_premium': True         # Buscar todos, inclusive premium (webhook needs to respect this)
             }
-
+            
             logger.info(f"Enviando para webhook get_all_posts: {webhook_data}")
-
+            
             try:
-                # Fazer requisição para o webhook
+            # Fazer requisição para o webhook
                 response = requests.post(webhook_url, json=webhook_data, timeout=20) # Longer timeout
-                response.raise_for_status()
-
-                # Processar resposta
-                data = response.json()
+            response.raise_for_status()
+            
+            # Processar resposta
+            data = response.json()
 
                 # Check response structure (expecting dict with 'posts')
                 if not isinstance(data, dict) or 'posts' not in data:
                      logger.error(f"Estrutura inesperada da resposta do webhook para all_posts: {data}")
                      raise ValueError("Formato de resposta inválido do webhook")
 
-                logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
-
-                # Extrair e processar posts
+            logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
+            
+            # Extrair e processar posts
                 all_posts_data = data.get('posts', [])
-
-                # Verificar se posts_data é um dicionário único ou uma lista
+            
+            # Verificar se posts_data é um dicionário único ou uma lista
                 if isinstance(all_posts_data, dict):
                     all_posts_data = [all_posts_data]  # Converte para lista com um item
-
-                # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
+            
+            # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
                 for post in all_posts_data:
-                    if 'created_at' in post and post['created_at']:
-                        try:
+                if 'created_at' in post and post['created_at']:
+                    try:
                             # Guardar o objeto datetime para ordenação E a string formatada
-                            created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
+                        created_dt = datetime.fromisoformat(post['created_at'].replace('Z', '+00:00'))
                             post['created_at_dt'] = created_dt
                             post['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
-                        except (ValueError, AttributeError):
-                            post['created_at_formatted'] = 'Data não disponível'
+                    except (ValueError, AttributeError):
+                        post['created_at_formatted'] = 'Data não disponível'
                             post['created_at_dt'] = datetime.min.replace(tzinfo=timezone.utc) # Fallback for sorting
-
-                # Armazenar na sessão com timestamp
+                        
+            # Armazenar na sessão com timestamp
                 session['all_posts_data'] = all_posts_data
-                session['all_posts_timestamp'] = datetime.now().timestamp()
+            session['all_posts_timestamp'] = datetime.now().timestamp()
                 logger.info(f"Posts armazenados na sessão: {len(all_posts_data)}")
 
             except requests.RequestException as e:
@@ -503,24 +503,24 @@ def all_posts():
                  return redirect(url_for('main.index'))
         else:
             logger.info(f"Usando posts da sessão: {len(all_posts_data)}")
-
+            
         # --- FILTRAR E ORDENAR OS POSTS NA MEMÓRIA ---
         filtered_posts = all_posts_data
-
+        
         # 1. Filtrar por tipo
         if post_type == 'free':
             filtered_posts = [p for p in filtered_posts if not p.get('premium_only', False)]
         elif post_type == 'premium':
             # Ensure only authenticated premium users see premium posts here too
             if current_user.is_authenticated and current_user.is_premium:
-                filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
+            filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
             else:
                  # If non-premium user tries to filter for premium, show nothing or redirect?
                  # Showing nothing is safer.
                  filtered_posts = []
                  flash("You need to be a premium member to view premium posts.", "warning")
 
-
+            
         # 2. Ordenar
         sort_key = 'created_at_dt' # Default sort key
         reverse_sort = True # Default: recent first
@@ -541,7 +541,7 @@ def all_posts():
              return post.get(sort_key, datetime.min.replace(tzinfo=timezone.utc))
 
         filtered_posts.sort(key=get_sort_key, reverse=reverse_sort)
-
+            
         # Contagem de posts por categoria (para os filtros no template)
         # Ensure calculation happens on the originally cached data if possible
         original_posts_for_count = session.get('all_posts_data', [])
@@ -550,24 +550,24 @@ def all_posts():
             'free': sum(1 for p in original_posts_for_count if not p.get('premium_only', False)),
             'premium': sum(1 for p in original_posts_for_count if p.get('premium_only', False))
         }
-
+        
         # 3. Paginação manual
         per_page = 10 # Posts per page on the /posts page
         total = len(filtered_posts)
-
+        
         # Calcular o número de páginas
         total_pages = (total + per_page - 1) // per_page if total > 0 else 1
-
+        
         # Ajustar a página atual se necessário
         page = min(max(1, page), max(1, total_pages))
-
+        
         # Calcular os índices de início e fim
         start_idx = (page - 1) * per_page
         end_idx = min(start_idx + per_page, total)
-
+        
         # Obter os posts da página atual
         paginated_posts = filtered_posts[start_idx:end_idx]
-
+        
         # Criar objeto de paginação simplified
         pagination_info = {
             'items': paginated_posts,
@@ -585,14 +585,14 @@ def all_posts():
         }
 
         logger.info(f"Exibindo {len(paginated_posts)} posts (página {page}/{total_pages}) com filtro '{post_type}' e sort '{sort_by}'")
-
-        return render_template('public/all_posts.html',
+        
+        return render_template('public/all_posts.html', 
                                posts=pagination_info, # Pass pagination dict
-                               active_filter=post_type,
-                               active_sort=sort_by,
-                               posts_count=posts_count,
-                               title="All Posts")
-
+                              active_filter=post_type,
+                              active_sort=sort_by,
+                              posts_count=posts_count,
+                              title="All Posts")
+                              
     except Exception as e:
         logger.error(f"Erro inesperado na rota all_posts: {str(e)}")
         logger.error(traceback.format_exc())
@@ -623,8 +623,16 @@ def coaching():
 
 @main_bp.route('/reconquest-test')
 def teste_de_reconquista():
-    """Render the reconquest test page."""
-    return render_template('public/coaching.html')
+    """Render the reconquest test page, pre-filling email if user is logged in."""
+    user_email = None
+    if current_user.is_authenticated:
+        user_email = current_user.email
+        logger.info(f"User {current_user.id} is logged in, pre-filling email: {user_email}")
+    else:
+        logger.info("User is not logged in, email field will be empty.")
+        
+    # Pass user_email to the template context
+    return render_template('public/coaching.html', user_email=user_email)
 
 @main_bp.route('/enviar-teste', methods=['POST'])
 def enviar_teste():

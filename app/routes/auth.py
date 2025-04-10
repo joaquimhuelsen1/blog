@@ -47,9 +47,9 @@ def is_safe_url(target):
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     # Redirect if already logged in
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-
+        if current_user.is_authenticated:
+            return redirect(url_for('main.index'))
+        
     # Determine if we are in the OTP verification stage
     email_for_otp = session.get('email_for_login_otp')
     otp_sent = bool(email_for_otp)
@@ -70,6 +70,8 @@ def login():
             logger.info(f"Received POST form data (Stage 1): {request.form.to_dict()}")
             if submitted_login_form.validate_on_submit():
                 email = submitted_login_form.email.data
+                email = email.lower() # Convert email to lowercase
+                logger.info(f"Processing login request for email: {email}") # Log lowercase email
                 # webhook_url = os.environ.get('WEBHOOK_LOGIN') # OLD: Webhook to request OTP
                 webhook_url = os.environ.get('WEBHOOK_RESENDOTP') # NEW: Use RESENDOTP webhook
                 if not webhook_url:
@@ -105,13 +107,21 @@ def login():
                         new_otp_form = VerifyLoginForm()
                         return render_template('auth/login.html', otp_form=new_otp_form, otp_sent=True, email=email)
                     else:
-                        # Try to get a message if it's a dict, otherwise use a default
-                        error_message = 'Failed to send login code.'
-                        if isinstance(response_data, dict):
+                        # --- CUSTOM ERROR HANDLING for email already registered --- 
+                        error_message = 'Could not send login code. Please try again.' # Default error
+                        is_already_registered = False
+                        # Check for specific format: [{ "status": "false" }]
+                        if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict) and response_data[0].get('status') == 'false':
+                            error_message = "This email is already registered. Please log in instead."
+                            is_already_registered = True
+                            logger.warning(f"Login attempt for already registered email: {email}")
+                        # Check for other potential error messages from webhook response
+                        elif isinstance(response_data, dict):
                             error_message = response_data.get('message', error_message)
                         elif isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
                              error_message = response_data[0].get('message', error_message)
-                             
+                        # --- END CUSTOM ERROR HANDLING --- 
+                        
                         # error_msg = response_data.get('message', 'Could not send login code. Is the email registered?') if isinstance(response_data, dict) else 'Failed to send login code.' # OLD ERROR MSG
                         logger.warning(f"Failed to send login OTP for {email}: Response={response_data}") # Log the actual response
                         flash(error_message, 'danger')
@@ -192,13 +202,13 @@ def login():
                         access_token = user_info.get('access_token')
                         refresh_token = user_info.get('refresh_token')
                         
-                        if not user_id:
+                            if not user_id:
                              logger.error(f"Webhook success but missing user ID for {email}")
                              flash('Login failed: Invalid user data received.', 'danger')
                              return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
                              
                         flask_user = User(
-                            id=user_id, 
+                                id=user_id,
                             email=user_email,
                             username=user_username,
                             is_admin=user_is_admin,
@@ -211,7 +221,7 @@ def login():
                         session.pop('email_for_login_otp', None)
                         
                         # Store user data in session (optional but can be useful)
-                        session['user_data'] = {
+                            session['user_data'] = {
                              'id': str(flask_user.id),
                              'username': flask_user.username,
                              'email': flask_user.email,
@@ -226,8 +236,8 @@ def login():
                         # Redirect
                         next_page = session.pop('next_url', None)
                         if not next_page or not is_safe_url(next_page):
-                            next_page = url_for('main.index')
-                        return redirect(next_page)
+                                next_page = url_for('main.index')
+                            return redirect(next_page)
                     else:
                         logger.warning(f"Failed OTP verification for {email}. Webhook response did not contain expected user data. Response: {response_data}")
                         flash('Invalid login code or verification failed.', 'danger')
@@ -238,7 +248,7 @@ def login():
                     logger.error(f"Network error verifying login OTP: {e}")
                     flash('Network error. Could not verify login code.', 'danger')
                     return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
-                except Exception as e:
+            except Exception as e:
                     logger.error(f"Unexpected error verifying login OTP: {e}")
                     flash('An unexpected error occurred.', 'danger')
                     return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
@@ -270,9 +280,9 @@ def logout():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-
+        if current_user.is_authenticated:
+            return redirect(url_for('main.index'))
+        
     # Determine stage: email entry or OTP verification?
     email_for_otp = session.get('email_for_registration_otp')
     otp_sent = bool(email_for_otp)
@@ -287,8 +297,10 @@ def register():
         # --- STAGE 1: Email Submission --- 
         if registration_form and registration_form.validate_on_submit():
             email = registration_form.email.data
+            email = email.lower() # Convert email to lowercase
+            logger.info(f"Processing registration request for email: {email}") # Log lowercase email
             webhook_url = os.environ.get('WEBHOOK_REGISTRATION') # Webhook to request OTP
-            if not webhook_url:
+                if not webhook_url:
                 logger.error("WEBHOOK_REGISTRATION (for OTP request) not configured")
                 flash('Server configuration error. Cannot send verification code.', 'danger')
                 return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
@@ -313,12 +325,26 @@ def register():
                         session['email_for_registration_otp'] = email
                         session.modified = True
                         flash('A verification code has been sent to your email.', 'info')
-                        # Re-render SAME page, now showing OTP form
                         otp_form = VerifyOtpForm() 
                         return render_template('auth/register.html', otp_form=otp_form, otp_sent=True, email=email)
                     else:
-                        error_message = response_data.get('message', 'Could not send verification code. Is the email already registered?')
-                        logger.warning(f"Webhook denied OTP request for {email}: Status={status}, Msg={error_message}")
+                        # --- CUSTOM ERROR HANDLING for email already registered --- 
+                        error_message = 'Could not send verification code. Please try again.' # Default error
+                        is_already_registered = False
+                        # Check for specific format: [{ "status": "false" }]
+                        if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict) and response_data[0].get('status') == 'false':
+                            error_message = "This email is already registered. Please log in instead."
+                            is_already_registered = True
+                            logger.warning(f"Registration attempt for already registered email: {email}")
+                        # Check for other potential error messages from webhook response
+                        elif isinstance(response_data, dict):
+                            error_message = response_data.get('message', error_message)
+                        elif isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+                             error_message = response_data[0].get('message', error_message)
+                        # --- END CUSTOM ERROR HANDLING --- 
+                        
+                        # error_message = response_data.get('message', 'Could not send verification code. Is the email already registered?') # OLD generic error fetch
+                        logger.warning(f"Webhook denied OTP request for {email}: Response={response_data}") 
                         flash(error_message, 'danger')
                          
                 except ValueError: # Not valid JSON
@@ -372,7 +398,7 @@ def register():
                 logger.info(f"Verifying registration OTP and username for {email} via {webhook_url}")
                 response = requests.post(webhook_url, json=payload, timeout=15)
                 response.raise_for_status()
-                response_data = response.json()
+                        response_data = response.json()
                 logger.info(f"Response from WEBHOOK_AUTHENTICATE_OTP (verify_registration_otp): {response_data}")
                 
                 # --- ADJUSTED RESPONSE HANDLING (v2) --- 
@@ -382,7 +408,7 @@ def register():
                     user_info = response_data[0] 
                     logger.info(f"Webhook returned user data (list format) successfully for registration: {email}")
                 # Case 2: Response is a direct user dictionary (check for presence of 'id')
-                elif isinstance(response_data, dict):
+                        elif isinstance(response_data, dict):
                     # --- ADD EXTRA LOGGING --- 
                     retrieved_id = response_data.get('id')
                     logger.info(f"Checking dict response: found 'id'? Type={type(retrieved_id)}, Value='{retrieved_id}'")
@@ -902,4 +928,4 @@ def test_email():
         logger.error(f"Erro ao enviar email de teste: {str(e)}")
         logger.error(traceback.format_exc())
         flash(f'Erro ao enviar email de teste: {str(e)}', 'danger')
-        return redirect(url_for('main.index')) 
+        return redirect(url_for('main.index'))
