@@ -52,9 +52,54 @@ def create_checkout_session():
         return redirect(url_for('main.premium_subscription'))
 
 @payments_bp.route('/checkout-success')
+@login_required
 def checkout_success():
-    """Page shown after successful checkout. Stripe webhook handles fulfillment."""
-    flash("Payment successful! Your premium access is being processed.", "success")
+    """Page shown after successful checkout. Attempts to update session immediately."""
+    session_id = request.args.get('session_id')
+    
+    if not session_id:
+        flash("Checkout session ID missing.", "warning")
+        return render_template('payments/checkout_success.html')
+
+    try:
+        stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+        checkout_session = stripe.checkout.Session.retrieve(session_id)
+        
+        # Verify the session status and user
+        if checkout_session.payment_status == 'paid' or checkout_session.status == 'complete': # Status might be 'complete' for trials
+            client_reference_id = checkout_session.get('client_reference_id')
+            stripe_customer_id = checkout_session.get('customer')
+            stripe_subscription_id = checkout_session.get('subscription')
+            
+            # Security check: Ensure the session belongs to the logged-in user
+            if client_reference_id == str(current_user.id):
+                current_app.logger.info(f"Checkout session {session_id} confirmed for user {current_user.id}.")
+                
+                # Update Flask session data immediately
+                user_data = session.get('user_data', {}) # Get existing or empty dict
+                user_data['is_premium'] = True
+                user_data['stripe_customer_id'] = stripe_customer_id
+                user_data['stripe_subscription_id'] = stripe_subscription_id
+                
+                session['user_data'] = user_data
+                session.modified = True
+                current_app.logger.info(f"Flask session updated for user {current_user.id}: is_premium=True, customer={stripe_customer_id}")
+                flash("Payment successful! Your Premium access is now active.", "success") # More definitive message
+            else:
+                current_app.logger.warning(f"Security mismatch: Checkout session {session_id} client_ref_id ({client_reference_id}) does not match logged in user ({current_user.id}).")
+                flash("There was an issue confirming your payment session. Please contact support if your access is not updated shortly.", "warning")
+        else:
+             current_app.logger.warning(f"Checkout session {session_id} status was not 'paid' or 'complete': {checkout_session.status} / {checkout_session.payment_status}")
+             flash("Your payment is processing. Your access will be updated once payment is confirmed.", "info")
+
+    except stripe.error.StripeError as e:
+        current_app.logger.error(f"Stripe API error retrieving session {session_id}: {e}")
+        flash("Could not verify payment session details. Your access will be updated via webhook.", "warning")
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error processing checkout success for session {session_id}: {e}")
+        flash("An unexpected error occurred. Your access will be updated via webhook.", "warning")
+
+    # Always render the success template
     return render_template('payments/checkout_success.html')
 
 @payments_bp.route('/checkout-cancel')
