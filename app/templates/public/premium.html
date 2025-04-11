@@ -775,6 +775,7 @@
                 <p class="hero-call-to-action">Ready for your <strong class="hero-title-highlight">comeback</strong>? <span class="pointer">👇</span></p>
                 <div class="btn-wrapper text-center">
                     <form action="{{ url_for('payments.create_checkout_session') }}" method="POST" class="d-inline-block">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="btn btn-premium premium-btn">
                             <i class="fas fa-unlock-alt"></i> Unlock Premium Now
                         </button>
@@ -983,6 +984,7 @@
                 <p class="fs-5 mb-4 fw-bold">👇 Tap the button below to get instant access.</p>
                 <div class="btn-wrapper text-center">
                     <form action="{{ url_for('payments.create_checkout_session') }}" method="POST" class="d-inline-block">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="btn btn-premium premium-btn">
                             <i class="fas fa-crown"></i> Get Premium Access
                         </button>

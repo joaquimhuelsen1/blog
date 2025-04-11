@@ -38,6 +38,10 @@ def create_checkout_session():
                 },
             ],
             mode='subscription',
+            # Add trial period data
+            subscription_data={
+                'trial_period_days': 14,
+            },
             success_url=url_for('payments.checkout_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=url_for('payments.checkout_cancel', _external=True),
             # Pass user ID to identify user when webhook is received

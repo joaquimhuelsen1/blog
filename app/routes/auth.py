@@ -264,13 +264,13 @@ def login():
                 email = session.get('email_for_login_otp') # Need email for re-rendering
                 return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
 
-        # --- Handle GET requests --- 
-        if otp_sent:
-            # Show OTP form if email is in session
-            return render_template('auth/login.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
-        else:
-            # Show email form
-            return render_template('auth/login.html', login_form=login_form, otp_sent=False)
+    # --- Handle GET requests --- 
+    if otp_sent:
+        # Show OTP form if email is in session
+        return render_template('auth/login.html', otp_form=otp_form, otp_sent=True, email=email_for_otp)
+    else:
+        # Show email form
+        return render_template('auth/login.html', login_form=login_form, otp_sent=False)
 
 @auth_bp.route('/logout', methods=['GET', 'POST'])
 def logout():
