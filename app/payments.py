@@ -134,8 +134,8 @@ def stripe_webhook():
                 try:
                     n8n_response_data = response_n8n.json()
                     current_app.logger.info(f"N8N response data: {n8n_response_data}")
-                    # Check N8N success (adjust based on actual N8N response structure)
-                    if response_n8n.status_code == 200 and isinstance(n8n_response_data, list) and len(n8n_response_data) > 0 and isinstance(n8n_response_data[0], dict) and n8n_response_data[0].get('id') == client_reference_id:
+                    # --- CORRECTED CHECK: Expecting a dictionary directly --- 
+                    if response_n8n.status_code == 200 and isinstance(n8n_response_data, dict) and n8n_response_data.get('id') == client_reference_id:
                         current_app.logger.info(f"N8N successfully processed update for user {client_reference_id}.")
                         n8n_update_successful = True
                         # Log intent but acknowledge limitation
