@@ -59,6 +59,10 @@ login_manager.login_message_category = 'info'
 # Carregar variáveis de ambiente do .env
 load_dotenv(override=True)
 
+# Initialize extensions OUTSIDE create_app
+csrf = CSRFProtect() # Initialize CSRF here
+# ... (initialize other extensions like login_manager, mail, Session here if needed for import)
+
 def create_app():
     """Create and configure the Flask application."""
     logger.info("==== INICIALIZANDO APLICAÇÃO FLASK ====")
@@ -158,17 +162,12 @@ def create_app():
     # logger.info("Proteção CSRF: DESATIVADA TEMPORARIAMENTE") -- UPDATING LOG MESSAGE
     logger.info("Proteção CSRF: ATIVADA")
 
-    # Initialize CSRF protection AFTER setting configurations
-    csrf = CSRFProtect()
-    csrf.init_app(app)
+    # Initialize extensions with the app INSIDE create_app
+    csrf.init_app(app) # Init CSRF with app here
     logger.info("CSRFProtect inicializado com o app")
     
-    # Inicializar extensões
-    # db.init_app(app)
     login_manager.init_app(app)
-    mail.init_app(app) # Inicializar Mail
-    
-    # Inicializar Flask-Session se disponível
+    mail.init_app(app) 
     if sess:
         sess.init_app(app)
         logger.info("Flask-Session inicializado com o app")

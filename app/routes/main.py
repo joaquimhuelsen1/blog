@@ -223,7 +223,6 @@ def post(post_id):
 
                 # 4. Refine the cutoff point: find nearest space/newline before the estimated point
                 preview_cutoff = estimated_cutoff
-                # Look for space within a reasonable range before the estimate
                 space_index = full_content.rfind(' ', max(0, estimated_cutoff - 100), estimated_cutoff)
                 if space_index != -1:
                     preview_cutoff = space_index
@@ -455,10 +454,10 @@ def all_posts():
             logger.info(f"Enviando para webhook get_all_posts: {webhook_data}")
             
             try:
-            # Fazer requisição para o webhook
+                # Fazer requisição para o webhook
                 response = requests.post(webhook_url, json=webhook_data, timeout=20) # Longer timeout
                 response.raise_for_status()
-
+                
                 # Processar resposta
                 data = response.json()
 
@@ -468,14 +467,14 @@ def all_posts():
                     raise ValueError("Formato de resposta inválido do webhook")
 
                 logger.info(f"Recebidos {len(data.get('posts', []))} posts do webhook")
-
+            
                 # Extrair e processar posts
                 all_posts_data = data.get('posts', [])
-
+            
                 # Verificar se posts_data é um dicionário único ou uma lista
                 if isinstance(all_posts_data, dict):
                     all_posts_data = [all_posts_data]  # Converte para lista com um item
-
+            
                 # Processar datas nos posts (é melhor fazer isso antes de guardar na sessão)
                 for post in all_posts_data:
                     if 'created_at' in post and post['created_at']:
@@ -487,7 +486,7 @@ def all_posts():
                         except (ValueError, AttributeError):
                             post['created_at_formatted'] = 'Data não disponível'
                             post['created_at_dt'] = datetime.min.replace(tzinfo=timezone.utc) # Fallback for sorting
-
+                        
                 # Armazenar na sessão com timestamp
                 session['all_posts_data'] = all_posts_data
                 session['all_posts_timestamp'] = datetime.now().timestamp()
@@ -515,8 +514,8 @@ def all_posts():
             if current_user.is_authenticated and current_user.is_premium:
                 filtered_posts = [p for p in filtered_posts if p.get('premium_only', False)]
             else:
-                 # If non-premium user tries to filter for premium, show nothing or redirect?
-                 # Showing nothing is safer.
+                # If non-premium user tries to filter for premium, show nothing or redirect?
+                # Showing nothing is safer.
                 filtered_posts = []
                 flash("You need to be a premium member to view premium posts.", "warning")
 

@@ -307,7 +307,7 @@ def register():
             email = email.lower() # Convert email to lowercase
             logger.info(f"Processing registration request for email: {email}") # Log lowercase email
             webhook_url = os.environ.get('WEBHOOK_REGISTRATION') # Webhook to request OTP
-            if not webhook_url:
+                if not webhook_url:
                 logger.error("WEBHOOK_REGISTRATION (for OTP request) not configured")
                 flash('Server configuration error. Cannot send verification code.', 'danger')
                 return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
