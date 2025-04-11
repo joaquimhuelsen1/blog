@@ -21,8 +21,11 @@ class Config:
     
     # Configurações básicas
     INSTANCE_PATH = os.path.join(basedir, 'instance')
-    if not os.path.exists(INSTANCE_PATH):
-        os.makedirs(INSTANCE_PATH)
+    # Certifique-se de que o diretório 'instance' existe
+    try:
+        os.makedirs(INSTANCE_PATH, exist_ok=True)
+    except OSError as e:
+        print(f"Error creating instance directory {INSTANCE_PATH}: {e}")
     
     # REMOVIDO: Bloco complexo de configuração do banco de dados
     # DATABASE_URL = os.environ.get('DATABASE_URL')

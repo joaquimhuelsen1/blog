@@ -197,32 +197,28 @@ def create_app():
         except:
             pass  # Ignorar erros durante o rollback
     
-    # Registrar blueprints individualmente com imports diretos
+    # Registrar blueprints
     registered_count = 0
-    
-    # Registrar main_bp
     try:
-        from app.routes.main import main_bp
+        from .routes.main import main_bp # Assuming main routes are in app/routes/main.py
         app.register_blueprint(main_bp)
         logger.info(f"✅ Blueprint 'main_bp' registrado com sucesso.")
         registered_count += 1
     except Exception as e:
         logger.error(f"❌ Falha ao registrar blueprint 'main_bp': {str(e)}")
         logger.error(traceback.format_exc()) # Log completo do erro
-
-    # Registrar auth_bp
+        
     try:
-        from app.routes.auth import auth_bp
+        from .routes.auth import auth_bp
         app.register_blueprint(auth_bp, url_prefix='/auth')
         logger.info(f"✅ Blueprint 'auth_bp' registrado com sucesso.")
         registered_count += 1
     except Exception as e:
         logger.error(f"❌ Falha ao registrar blueprint 'auth_bp': {str(e)}")
         logger.error(traceback.format_exc()) # Log completo do erro
-
-    # Registrar admin_bp
+        
     try:
-        from app.routes.admin import admin_bp
+        from .routes.admin import admin_bp
         app.register_blueprint(admin_bp, url_prefix='/admin')
         logger.info(f"✅ Blueprint 'admin_bp' registrado com sucesso.")
         registered_count += 1
@@ -230,19 +226,18 @@ def create_app():
         logger.error(f"❌ Falha ao registrar blueprint 'admin_bp': {str(e)}")
         logger.error(traceback.format_exc()) # Log completo do erro
 
-    # Registrar ai_chat_bp
     try:
-        from app.routes.ai_chat import ai_chat_bp
+        from .routes.ai_chat import ai_chat_bp
         app.register_blueprint(ai_chat_bp, url_prefix='/ai-chat')
         logger.info(f"✅ Blueprint 'ai_chat_bp' registrado com sucesso.")
         registered_count += 1
     except Exception as e:
         logger.error(f"❌ Falha ao registrar blueprint 'ai_chat_bp': {str(e)}")
         logger.error(traceback.format_exc()) # Log completo do erro
-
+        
     # Registrar payments_bp
     try:
-        from app.routes.payments import payments_bp
+        from .payments import payments_bp # CORRECT IMPORT PATH (from app.payments)
         app.register_blueprint(payments_bp, url_prefix='/payments')
         logger.info(f"✅ Blueprint 'payments_bp' registrado com sucesso.")
         registered_count += 1
