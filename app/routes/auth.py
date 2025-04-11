@@ -201,6 +201,10 @@ def login():
                         auth_id = user_info.get('auth-id') # Key might be 'auth-id'
                         access_token = user_info.get('access_token')
                         refresh_token = user_info.get('refresh_token')
+                        # --- NEW: Extract Stripe IDs --- 
+                        stripe_customer_id = user_info.get('stripe_customer_id') 
+                        stripe_subscription_id = user_info.get('stripe_subscription_id')
+                        # --- END NEW --- 
 
                         if not user_id:
                             logger.error(f"Webhook success but missing user ID for {email}")
@@ -229,7 +233,11 @@ def login():
                             'is_premium': flask_user.is_premium,
                             'age': flask_user.age,
                             'ai_credits': flask_user.ai_credits,
-                            'auth_id': auth_id
+                            'auth_id': auth_id,
+                            # --- NEW: Add Stripe IDs to session --- 
+                            'stripe_customer_id': stripe_customer_id, 
+                            'stripe_subscription_id': stripe_subscription_id 
+                            # --- END NEW --- 
                         }
                         session.modified = True
 
