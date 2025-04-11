@@ -240,6 +240,16 @@ def create_app():
         logger.error(f"❌ Falha ao registrar blueprint 'ai_chat_bp': {str(e)}")
         logger.error(traceback.format_exc()) # Log completo do erro
 
+    # Registrar payments_bp
+    try:
+        from app.routes.payments import payments_bp
+        app.register_blueprint(payments_bp, url_prefix='/payments')
+        logger.info(f"✅ Blueprint 'payments_bp' registrado com sucesso.")
+        registered_count += 1
+    except Exception as e:
+        logger.error(f"❌ Falha ao registrar blueprint 'payments_bp': {str(e)}")
+        logger.error(traceback.format_exc()) # Log completo do erro
+
     if registered_count == 0:
          logger.critical("❌ NENHUM BLUEPRINT FOI REGISTRADO! Verifique os erros acima.")
     else:

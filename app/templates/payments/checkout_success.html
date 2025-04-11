@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block title %}Checkout Successful{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <h1 class="mb-4"><i class="fas fa-check-circle text-success"></i> Payment Successful!</h1>
+            <p class="lead">Thank you for subscribing to our Premium plan.</p>
+            <p>Your access is being updated. You should receive confirmation shortly.</p>
+            <p>You can now enjoy all the premium features.</p>
+            <a href="{{ url_for('main.index') }}" class="btn btn-primary mt-3">Go to Homepage</a>
+            <a href="{{ url_for('auth.profile') }}" class="btn btn-secondary mt-3">Go to Profile</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

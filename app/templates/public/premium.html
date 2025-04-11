@@ -772,15 +772,13 @@
                     Get access to proven strategies that help you win her back – and never lose her again.
                 </p>
                 
-                <p class="hero-call-to-action">
-                    <span class="pointer">👉</span> Start rebuilding today.
-                </p>
-                
-                <div class="btn-wrapper">
-                    <a href="{{ url_for('main.start_premium_checkout') }}" class="premium-btn" onclick="gtag('event', 'clique_btn1_premium', {'event_category': 'Engajamento', 'event_label': 'Botão Premium 1', 'value': 1});">
-                        UNLOCK PREMIUM ACCESS / 14-DAY FREE
-                    </a>
-                    <p class="text-center mt-2">After 14 days, $20 per month</p>
+                <p class="hero-call-to-action">Ready for your <strong class="hero-title-highlight">comeback</strong>? <span class="pointer">👇</span></p>
+                <div class="btn-wrapper text-center">
+                    <form action="{{ url_for('payments.create_checkout_session') }}" method="POST" class="d-inline-block">
+                        <button type="submit" class="btn btn-premium premium-btn">
+                            <i class="fas fa-unlock-alt"></i> Unlock Premium Now
+                        </button>
+                    </form>
                 </div>
             </section>
 
@@ -983,11 +981,12 @@
                     Now it's time to follow a system that actually works.
                 </p>
                 <p class="fs-5 mb-4 fw-bold">👇 Tap the button below to get instant access.</p>
-                <div class="btn-wrapper">
-                    <a href="{{ url_for('main.start_premium_checkout') }}" class="premium-btn" onclick="gtag('event', 'clique_btn2_premium', {'event_category': 'Engajamento', 'event_label': 'Botão Premium 2', 'value': 1});">
-                        UNLOCK PREMIUM ACCESS / 14-DAY FREE
-                    </a>
-                    <p class="text-center mt-2">After 14 days, $20 per month</p>
+                <div class="btn-wrapper text-center">
+                    <form action="{{ url_for('payments.create_checkout_session') }}" method="POST" class="d-inline-block">
+                        <button type="submit" class="btn btn-premium premium-btn">
+                            <i class="fas fa-crown"></i> Get Premium Access
+                        </button>
+                    </form>
                 </div>
             </section>
 

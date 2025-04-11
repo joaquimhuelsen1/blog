@@ -22,6 +22,18 @@
                     {% endif %}
                 </div>
                 
+                <!-- Botão de Gerenciar Assinatura (Apenas para Premium) -->
+                {% if current_user.is_authenticated and current_user.is_premium %}
+                <div class="mb-4 text-center">
+                    <form action="{{ url_for('payments.customer_portal') }}" method="POST">
+                        <!-- <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/> -->
+                         <button type="submit" class="btn btn-info">
+                            <i class="fas fa-credit-card"></i> Manage Subscription
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
                 <form method="POST" action="{{ url_for('auth.profile') }}">
                     {{ form.hidden_tag() }}
                     
