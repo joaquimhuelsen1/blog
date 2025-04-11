@@ -215,8 +215,8 @@ def post(post_id):
             plain_len = len(plain_text)
 
             if plain_len > 0: # Avoid division by zero if content is only HTML
-                # 2. Calculate midpoint of plain text
-                target_plain_chars = plain_len // 2
+                # 2. Calculate 25% of plain text
+                target_plain_chars = plain_len // 4 # <-- Changed from // 2 to // 4
                 
                 # 3. Estimate the cutoff point in the original string based on plain text ratio
                 estimated_cutoff = int((target_plain_chars / plain_len) * len(full_content))
