@@ -1,7 +1,9 @@
 import stripe
 import os
+import requests
 from flask import Blueprint, request, redirect, url_for, current_app, session, flash, render_template
 from flask_login import login_required, current_user
+from app import csrf
 
 payments_bp = Blueprint('payments', __name__)
 
@@ -76,6 +78,7 @@ def checkout_cancel():
 
 
 @payments_bp.route('/stripe-webhook', methods=['POST'])
+@csrf.exempt
 def stripe_webhook():
     """Handle incoming webhooks from Stripe."""
     stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
@@ -131,7 +134,6 @@ def stripe_webhook():
         }
         
         try:
-            import requests
             response = requests.post(n8n_webhook_url, json=n8n_payload, timeout=15)
             response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
             current_app.logger.info(f"N8N update webhook called successfully for user {client_reference_id}. Status: {response.status_code}")
