@@ -49,7 +49,7 @@ def login():
     # Redirect if already logged in
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
-
+        
     # Determine if we are in the OTP verification stage
     email_for_otp = session.get('email_for_login_otp')
     otp_sent = bool(email_for_otp)
@@ -87,7 +87,7 @@ def login():
                     response = requests.post(webhook_url, json=payload, timeout=10)
                     response.raise_for_status()
                     response_data = response.json()
-
+                    
                     # --- ADJUSTED RESPONSE CHECK FOR STAGE 1 --- 
                     is_success = False
                     # Case 1: Response is like [{'status': 'success'}]
@@ -208,7 +208,7 @@ def login():
                             return render_template('auth/login.html', otp_form=submitted_otp_form, otp_sent=True, email=email)
 
                         flask_user = User(
-                                id=user_id,
+                            id=user_id,
                             email=user_email,
                             username=user_username,
                             is_admin=user_is_admin,
@@ -222,21 +222,21 @@ def login():
 
                         # Store user data in session (optional but can be useful)
                         session['user_data'] = {
-                                'id': str(flask_user.id),
-                                'username': flask_user.username,
-                                'email': flask_user.email,
-                                'is_admin': flask_user.is_admin,
-                                'is_premium': flask_user.is_premium,
-                                'age': flask_user.age,
-                                'ai_credits': flask_user.ai_credits,
-                                'auth_id': auth_id
+                            'id': str(flask_user.id),
+                            'username': flask_user.username,
+                            'email': flask_user.email,
+                            'is_admin': flask_user.is_admin,
+                            'is_premium': flask_user.is_premium,
+                            'age': flask_user.age,
+                            'ai_credits': flask_user.ai_credits,
+                            'auth_id': auth_id
                         }
                         session.modified = True
 
                         # Redirect
                         next_page = session.pop('next_url', None)
                         if not next_page or not is_safe_url(next_page):
-                                next_page = url_for('main.index')
+                            next_page = url_for('main.index')
                         logger.info(f"Redirecting user {email} to {next_page}")
                         return redirect(next_page)
                     else:
@@ -289,7 +289,7 @@ def logout():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
-
+    
     # Determine stage: email entry or OTP verification?
     email_for_otp = session.get('email_for_registration_otp')
     otp_sent = bool(email_for_otp)
@@ -307,7 +307,7 @@ def register():
             email = email.lower() # Convert email to lowercase
             logger.info(f"Processing registration request for email: {email}") # Log lowercase email
             webhook_url = os.environ.get('WEBHOOK_REGISTRATION') # Webhook to request OTP
-                if not webhook_url:
+            if not webhook_url:
                 logger.error("WEBHOOK_REGISTRATION (for OTP request) not configured")
                 flash('Server configuration error. Cannot send verification code.', 'danger')
                 return render_template('auth/register.html', registration_form=registration_form, otp_sent=False)
