@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, jsonify, session, current_app
 from flask_login import current_user, login_required
 # from app import db # REMOVIDO
-from app.forms import ChatMessageForm, CommentForm
+from app.forms import ChatMessageForm, CommentForm, MemberConsultingForm
 import os
 import requests
 import json
@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from types import SimpleNamespace
 import re # <--- Keep this import
+from markupsafe import Markup # <--- ADDED Markup import
 # import stripe # <--- Remove Stripe import
 
 # Configurar logs
@@ -756,3 +757,254 @@ def start_premium_checkout():
         flash('An error occurred while preparing your subscription.', 'danger')
         return redirect(url_for('main.premium_subscription')) # Volta para a página premium
     # --- Fim da nova rota --- 
+
+@main_bp.route('/form/areademembros', methods=['GET', 'POST'])
+def member_consulting_form():
+    form = MemberConsultingForm()
+    form_action_endpoint = 'main.member_consulting_form' # Define endpoint name
+
+    if request.method == 'GET':
+        # Capture UTM parameters from the URL query string
+        form.utm_source.data = request.args.get('utm_source')
+        form.utm_medium.data = request.args.get('utm_medium')
+        form.utm_campaign.data = request.args.get('utm_campaign')
+        form.utm_term.data = request.args.get('utm_term')
+        form.utm_content.data = request.args.get('utm_content')
+        
+    if form.validate_on_submit():
+        # Coletar dados do formulário (incluindo UTMs dos hidden fields)
+        form_data = {
+            "purchase_email": form.purchase_email.data,
+            "full_name": form.full_name.data,
+            "age": form.age.data,
+            "partner_name": form.partner_name.data,
+            "partner_age": form.partner_age.data,
+            "relationship_length": form.relationship_length.data,
+            "breakup_reason": form.breakup_reason.data,
+            "contact_method": form.contact_method.data,
+            "contact_info": form.contact_info.data,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitter_user_id": str(current_user.id) if current_user.is_authenticated else None,
+            "submitter_username": current_user.username if current_user.is_authenticated else None,
+            # --- ADD UTM DATA --- 
+            "utm_source": form.utm_source.data,
+            "utm_medium": form.utm_medium.data,
+            "utm_campaign": form.utm_campaign.data,
+            "utm_term": form.utm_term.data,
+            "utm_content": form.utm_content.data,
+            # --- ADD FORM IDENTIFIER --- 
+            "form": "areademembros"
+            # ------------------------- 
+        }
+        
+        # Obter URL do webhook do .env
+        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK') # Usar a variável de ambiente
+        
+        if not webhook_url:
+            logger.error("N8N_MEMBER_FORM_WEBHOOK não configurado.")
+            # REMOVED flash message here as well, WTForms will handle field errors
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+        try:
+            logger.info(f"Enviando dados do formulário para o webhook: {webhook_url}")
+            response = requests.post(webhook_url, json=form_data, timeout=15)
+            response.raise_for_status() # Lança erro para códigos 4xx/5xx
+            
+            logger.info(f"Webhook respondeu com status {response.status_code}")
+            
+            # Prepare success message for display on the same page
+            success_message = Markup("""
+                Your information has been submitted successfully! We will contact you shortly, stay tuned.<br>
+                (To speed up contact, join the telegram group and send me a private message saying that you have filled out the form).<br><br>
+                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="fw-bold">JOIN THE TELEGRAM GROUP HERE</a><br><br>
+                <small>Your information will be handled with complete confidentiality and will not be shared with anyone.</small>
+            """)
+            
+            # Re-render the form page with success state and message
+            # Pass an empty form object maybe? Or just don't pass the form?
+            # Let's pass success=True and the message. Template will handle display.
+            return render_template('forms/member_form.html', 
+                                   submission_success=True, 
+                                   success_message=success_message,
+                                   form_action_endpoint=form_action_endpoint)
+
+        except requests.RequestException as e:
+            logger.error(f"Erro ao enviar formulário para o webhook: {e}")
+            # REMOVED flash message for webhook error
+            # Re-render form; WTForms errors (if any) will show.
+            # Consider adding a generic error message if needed, but not via flash.
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+        except Exception as e:
+             logger.error(f"Erro inesperado ao processar formulário: {e}")
+             logger.error(traceback.format_exc())
+             # REMOVED flash message for unexpected error
+             # Re-render form
+             return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+    # If GET or validation fails (POST)
+    # Validation errors will be displayed by the template below the fields
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+# --- ADJUST EMAIL MARKETING FORM ROUTE --- 
+@main_bp.route('/form/emailmarketing', methods=['GET', 'POST'])
+def email_marketing_form():
+    form = MemberConsultingForm()
+    form_action_endpoint = 'main.email_marketing_form' # Define endpoint name
+
+    if request.method == 'GET':
+        form.utm_source.data = request.args.get('utm_source')
+        form.utm_medium.data = request.args.get('utm_medium')
+        form.utm_campaign.data = request.args.get('utm_campaign')
+        form.utm_term.data = request.args.get('utm_term')
+        form.utm_content.data = request.args.get('utm_content')
+        
+    if form.validate_on_submit():
+        # Collect ALL data from MemberConsultingForm
+        form_data = {
+            "purchase_email": form.purchase_email.data,
+            "full_name": form.full_name.data,
+            "age": form.age.data,
+            "partner_name": form.partner_name.data,
+            "partner_age": form.partner_age.data,
+            "relationship_length": form.relationship_length.data,
+            "breakup_reason": form.breakup_reason.data,
+            "contact_method": form.contact_method.data,
+            "contact_info": form.contact_info.data,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitter_user_id": str(current_user.id) if current_user.is_authenticated else None,
+            "submitter_username": current_user.username if current_user.is_authenticated else None,
+            "utm_source": form.utm_source.data,
+            "utm_medium": form.utm_medium.data,
+            "utm_campaign": form.utm_campaign.data,
+            "utm_term": form.utm_term.data,
+            "utm_content": form.utm_content.data,
+            # --- FORM IDENTIFIER (CORRECTED) --- 
+            "form": "emailmarketing" # Set identifier for this route
+            # ---------------------------------- 
+        }
+
+        # Use the SAME webhook URL 
+        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK') 
+
+        if not webhook_url:
+            logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
+            # Re-render the member form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+        try:
+            logger.info(f"Enviando dados do formulário (emailmarketing source) para: {webhook_url}")
+            response = requests.post(webhook_url, json=form_data, timeout=15)
+            response.raise_for_status()
+            logger.info(f"Webhook respondeu com status {response.status_code}")
+
+            # --- USE THE LONG SUCCESS MESSAGE (same as areademembros) --- 
+            success_message = Markup(""" 
+                Your information has been submitted successfully! We will contact you shortly, stay tuned.<br>
+                (To speed up contact, join the telegram group and send me a private message saying that you have filled out the form).<br><br>
+                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="fw-bold">JOIN THE TELEGRAM GROUP HERE</a><br><br>
+                <small>Your information will be handled with complete confidentiality and will not be shared with anyone.</small>
+            """)
+            # ---------------------------------------------------------- 
+            
+            # Re-render the MEMBER form template with the LONG success message
+            return render_template('forms/member_form.html', 
+                                   submission_success=True, 
+                                   success_message=success_message, # Pass the LONG message
+                                   form_action_endpoint=form_action_endpoint)
+
+        except requests.RequestException as e:
+            logger.error(f"Erro ao enviar formulário (emailmarketing source): {e}")
+            # Re-render MEMBER form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+        except Exception as e:
+            logger.error(f"Erro inesperado no formulário (emailmarketing source): {e}")
+            logger.error(traceback.format_exc())
+            # Re-render MEMBER form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+    # If GET or validation fails
+    # Render the MEMBER form template
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+# --- ADD BLOG FORM ROUTE --- 
+@main_bp.route('/form/blog', methods=['GET', 'POST'])
+def blog_form():
+    # Use the MemberConsultingForm for this route as well
+    form = MemberConsultingForm() 
+    form_action_endpoint = 'main.blog_form' # Define endpoint name for THIS route
+
+    # Capture UTMs on GET (same logic)
+    if request.method == 'GET':
+        form.utm_source.data = request.args.get('utm_source')
+        form.utm_medium.data = request.args.get('utm_medium')
+        form.utm_campaign.data = request.args.get('utm_campaign')
+        form.utm_term.data = request.args.get('utm_term')
+        form.utm_content.data = request.args.get('utm_content')
+        
+    if form.validate_on_submit():
+        # Collect ALL data from MemberConsultingForm
+        form_data = {
+            "purchase_email": form.purchase_email.data,
+            "full_name": form.full_name.data,
+            "age": form.age.data,
+            "partner_name": form.partner_name.data,
+            "partner_age": form.partner_age.data,
+            "relationship_length": form.relationship_length.data,
+            "breakup_reason": form.breakup_reason.data,
+            "contact_method": form.contact_method.data,
+            "contact_info": form.contact_info.data,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "submitter_user_id": str(current_user.id) if current_user.is_authenticated else None,
+            "submitter_username": current_user.username if current_user.is_authenticated else None,
+            "utm_source": form.utm_source.data,
+            "utm_medium": form.utm_medium.data,
+            "utm_campaign": form.utm_campaign.data,
+            "utm_term": form.utm_term.data,
+            "utm_content": form.utm_content.data,
+            # --- FORM IDENTIFIER --- 
+            "form": "blog" # Set identifier for THIS route
+            # --------------------- 
+        }
+
+        # Use the SAME webhook URL 
+        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK') 
+
+        if not webhook_url:
+            logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
+            # Re-render the member form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+        try:
+            logger.info(f"Enviando dados do formulário (blog source) para: {webhook_url}")
+            response = requests.post(webhook_url, json=form_data, timeout=15)
+            response.raise_for_status()
+            logger.info(f"Webhook respondeu com status {response.status_code}")
+
+            # --- USE THE LONG SUCCESS MESSAGE --- 
+            success_message = Markup(""" 
+                Your information has been submitted successfully! We will contact you shortly, stay tuned.<br>
+                (To speed up contact, join the telegram group and send me a private message saying that you have filled out the form).<br><br>
+                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="fw-bold">JOIN THE TELEGRAM GROUP HERE</a><br><br>
+                <small>Your information will be handled with complete confidentiality and will not be shared with anyone.</small>
+            """)
+            # ----------------------------------
+            
+            # Re-render the MEMBER form template with the LONG success message
+            return render_template('forms/member_form.html', 
+                                   submission_success=True, 
+                                   success_message=success_message, 
+                                   form_action_endpoint=form_action_endpoint)
+
+        except requests.RequestException as e:
+            logger.error(f"Erro ao enviar formulário (blog source): {e}")
+            # Re-render MEMBER form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+        except Exception as e:
+            logger.error(f"Erro inesperado no formulário (blog source): {e}")
+            logger.error(traceback.format_exc())
+            # Re-render MEMBER form template with error
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+
+    # If GET or validation fails
+    # Render the MEMBER form template
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)

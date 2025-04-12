@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Relationship Consulting Form{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header text-center" style="background-color: #F1F1F1;">
+                <h4 class="m-0" style="color: #000000; font-weight: 500;">Relationship Consulting Form</h4>
+            </div>
+            <div class="card-body">
+
+                {# --- Conditional Display --- #}
+                {% if submission_success %}
+                    {# Display Success Message Directly and Blog Button #}
+                    <div class="text-center p-3">
+                        <p style="font-size: 1.1em;">{{ success_message | safe }}</p>
+                        <a href="{{ url_for('main.index') }}" class="btn btn-danger btn-lg mt-4">Visit Blog</a>
+                    </div>
+
+                {% else %}
+                    {# Display Form #}
+                    <p class="mb-4">This form is essential for your personalized consultation. Please answer honestly, as your responses are crucial in providing you with the best possible guidance.<br><br>Fill it out carefully. The more details you provide, the more accurate our analysis will be, leading to better results in winning your partner back.</p>
+                    
+                    <form method="POST" action="{{ url_for(form_action_endpoint) }}">
+                        {{ form.hidden_tag() }}
+                        {# --- RENDER UTM Hidden Fields --- #}
+                        {{ form.utm_source() }}
+                        {{ form.utm_medium() }}
+                        {{ form.utm_campaign() }}
+                        {{ form.utm_term() }}
+                        {{ form.utm_content() }}
+                        {# ------------------------------ #}
+
+                        <!-- Purchase Email -->
+                        <div class="mb-3">
+                            {{ form.purchase_email.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.purchase_email(class="form-control" + (" is-invalid" if form.purchase_email.errors else "")) }}
+                            {% if form.purchase_email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.purchase_email.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Full Name -->
+                        <div class="mb-3">
+                            {{ form.full_name.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else "")) }}
+                            {% if form.full_name.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.full_name.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Age -->
+                        <div class="mb-3">
+                            {{ form.age.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.age(class="form-control" + (" is-invalid" if form.age.errors else ""), type="number") }}
+                            {% if form.age.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.age.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Partner's Name -->
+                        <div class="mb-3">
+                            {{ form.partner_name.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.partner_name(class="form-control" + (" is-invalid" if form.partner_name.errors else "")) }}
+                            {% if form.partner_name.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.partner_name.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Partner's Age -->
+                        <div class="mb-3">
+                            {{ form.partner_age.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.partner_age(class="form-control" + (" is-invalid" if form.partner_age.errors else ""), type="number") }}
+                            {% if form.partner_age.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.partner_age.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Relationship Length -->
+                        <div class="mb-3">
+                            {{ form.relationship_length.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.relationship_length(class="form-control" + (" is-invalid" if form.relationship_length.errors else "")) }}
+                            <small class="form-text text-muted" style="font-size: 1.05em; color: #000000 !important;">Describe in detail the main phases of your relationship.</small>
+                            {% if form.relationship_length.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.relationship_length.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Breakup Reason -->
+                        <div class="mb-3">
+                            {{ form.breakup_reason.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.breakup_reason(class="form-control" + (" is-invalid" if form.breakup_reason.errors else "")) }}
+                            <small class="form-text text-muted" style="font-size: 1.05em; color: #000000 !important;">Describe in detail the main reason that led to the end of your relationship. Be honest—this information is essential for us to help you in the best way possible.</small>
+                            {% if form.breakup_reason.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.breakup_reason.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Contact Method -->
+                        <div class="mb-3">
+                            {{ form.contact_method.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {% for subfield in form.contact_method %}
+                                <div class="form-check">
+                                    {{ subfield(class="form-check-input" + (" is-invalid" if form.contact_method.errors else "")) }}
+                                    {{ subfield.label(class="form-check-label") }}
+                                </div>
+                            {% endfor %}
+                            <small class="form-text text-muted" style="font-size: 1.05em; color: #000000 !important;">I, Ethan, will reach out to you to discuss your situation, answer any questions, and explain how the consultation will work. Let me know your preferred contact method below:</small>
+                            {% if form.contact_method.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.contact_method.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Contact Info -->
+                        <div class="mb-3">
+                            {{ form.contact_info.label(class="form-label fw-bold") }} <span class="text-danger">*</span>
+                            {{ form.contact_info(class="form-control" + (" is-invalid" if form.contact_info.errors else "")) }}
+                            <small class="form-text text-muted" style="font-size: 1.05em; color: #000000 !important; white-space: pre-wrap;">{{ form.contact_info.description | safe }}</small>
+                            {% if form.contact_info.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.contact_info.errors[0] }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <hr>
+
+                        <!-- Centered Submit Button -->
+                        <div class="text-center mt-4">
+                            {{ form.submit(class="btn btn-primary btn-lg") }}
+                        </div>
+                    </form>
+                {% endif %}
+                {# --- End Conditional Display --- #}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, IntegerField, DateTimeField, FileField, SelectField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField, IntegerField, DateTimeField, FileField, SelectField, RadioField, HiddenField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, URL, Optional, NumberRange
 from app.models import User
 from datetime import datetime
@@ -104,3 +104,58 @@ class VerifyOtpForm(FlaskForm):
     # def validate_username(self, username):
     #     # Lógica para verificar via webhook se necessário
     #     pass 
+
+class MemberConsultingForm(FlaskForm):
+    purchase_email = StringField(
+        'Your purchase email', 
+        validators=[DataRequired(message="Purchase email is required."), Email()]
+    )
+    full_name = StringField(
+        '1. Your full name', 
+        validators=[DataRequired(message="Your full name is required.")]
+    )
+    age = IntegerField(
+        '2. Your age', 
+        validators=[DataRequired(message="Your age is required."), NumberRange(min=18, max=120)]
+    )
+    partner_name = StringField(
+        "3. Your ex/current partner's name", 
+        validators=[DataRequired(message="Partner's name is required.")]
+    )
+    partner_age = IntegerField(
+        "4. Your ex/current partner's age", 
+        validators=[DataRequired(message="Partner's age is required."), NumberRange(min=18, max=120)]
+    )
+    relationship_length = TextAreaField(
+        '5. How long were you in a relationship?', 
+        validators=[DataRequired(message="Relationship duration description is required.")],
+        render_kw={"rows": 3}
+    )
+    breakup_reason = TextAreaField(
+        '6. What was the main reason for the breakup?',
+        validators=[DataRequired(message="Breakup reason is required.")],
+        render_kw={"rows": 5}
+    )
+    contact_method = RadioField(
+        "7. What's the best way for us to contact you?",
+        choices=[
+            ('Telegram', 'Telegram'), 
+            ('iPhone Messages', 'iPhone Messages'), 
+            ('Email', 'Email')
+        ],
+        validators=[DataRequired(message="Please choose a contact method.")]
+    )
+    contact_info = TextAreaField(
+        '8. Add your contact information based on your chosen method:',
+        description='Ideal response format\n\n<b>Telegram:</b> Name (Join the Telegram group and send me a private message for a quicker response)\n<b>iPhone Messages:</b> Number (USA only)\n<b>Email:</b> youremail@email.com',
+        validators=[DataRequired(message="Contact information is required.")],
+        render_kw={"rows": 3}
+    )
+    submit = SubmitField('Submit Information')
+    
+    # --- ADD UTM Hidden Fields ---
+    utm_source = HiddenField('utm_source')
+    utm_medium = HiddenField('utm_medium')
+    utm_campaign = HiddenField('utm_campaign')
+    utm_term = HiddenField('utm_term')
+    utm_content = HiddenField('utm_content') 
