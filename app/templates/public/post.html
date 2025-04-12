@@ -147,44 +147,56 @@
                         {% endif %}
                     </section>
                     
-                    <!-- Personalized Coaching Section -->
+                    <!-- Sidebar Cards Section -->
                     <section class="mt-5 pt-4 border-top">
+                        
+                        {# --- Consulting Banner FIRST --- #}
+                        {# Define utm_content before including #}
+                        {% set utm_content = post_slug %} 
                         {% include 'public/components/reconquest_test_banner.html' %}
-                    </section>
+                        {# ----------------------------- #}
                     
-                    {# --- ADICIONAR CARD PREMIUM AQUI --- #}
-                    <section class="mt-5">
-                        <div class="card shadow-sm">
-                            <div class="card-header bg-warning text-white">
-                                <h4 class="m-0 text-center"><i class="fas fa-crown me-2" style="color: #000;"></i> Subscribe to Premium</h4>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-2">Unlock weekly exclusive content crafted to transform your love life:</p>
-                                <ul class="list-unstyled mb-3">
-                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Monday:</strong> Reconquest strategies that really work</li>
-                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Wednesday:</strong> How to keep her by your side</li>
-                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Friday:</strong> Healing insights to overcome heartbreak</li>
+                        {# --- Premium Card SECOND --- #}
+                        <div class="card mb-4 reconquest-banner" style="border-left: 4px solid var(--bs-warning); background-color: #ffffff;">
+                            <div class="card-body p-4 text-center">
+                                <h3 class="mb-3 reconquest-banner-title" style="color: var(--bs-warning);"><i class="fas fa-crown me-2"></i> Subscribe to Premium</h3>
+                                <p class="mb-2 reconquest-banner-text">Unlock weekly exclusive content crafted to transform your love life:</p>
+                                <ul class="list-unstyled mb-3 reconquest-banner-text text-start" style="font-size: 0.9em; display: inline-block;">
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Monday:</strong> Reconquest strategies</li>
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Wednesday:</strong> Keep her by your side</li>
+                                    <li><i class="fas fa-check-circle text-success me-1"></i> <strong>Friday:</strong> Overcome heartbreak</li>
                                 </ul>
-                                <p class="mb-2">Plus:</p>
-                                <ul class="list-unstyled mb-3">
-                                    <li><i class="fas fa-star text-warning me-1"></i> Advanced female psychology</li>
-                                    <li><i class="fas fa-star text-warning me-1"></i> Personalized support from Ethan</li>
-                                    <li><i class="fas fa-star text-warning me-1"></i> Surprise bonus content</li>
-                                </ul>
-                                <p class="text-center fw-bold mt-4">
-                                    <i class="fas fa-lock me-1"></i> Start your transformation. 👇
-                                </p>
-                                <p class="text-center text-success mb-2"><strong>14-DAY FREE TRIAL!</strong></p>
-                                {# Lógica para botão baseado no status do usuário #}
+                                <p class="mb-2 reconquest-banner-text">Plus: Advanced psychology, personalized support, bonus content.</p>
+                                <p class="text-success mb-3 reconquest-banner-text"><strong>14-DAY FREE TRIAL!</strong></p>
                                 {% if current_user.is_authenticated and current_user.is_premium %}
-                                <button class="btn btn-success w-100 text-white" disabled>YOU ARE ALREADY A PREMIUM USER</button>
+                                <button class="btn btn-success btn-lg px-4 py-2 reconquest-banner-button" disabled>PREMIUM ACTIVE</button>
                                 {% else %}
-                                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-warning w-100 text-white" onclick="gtag('event', 'clique_card_premium', {'event_category': 'Engajamento', 'event_label': 'Card Premium Post', 'value': 1});">Learn more</a> {# Ajustar event_label se necessário #}
+                                <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-warning btn-lg px-4 py-2 reconquest-banner-button" onclick="gtag('event', 'clique_card_premium', {'event_category': 'Engajamento', 'event_label': 'Card Premium Post', 'value': 1});">
+                                     <i class="fas fa-crown me-1"></i> Learn More
+                                </a>
                                 {% endif %}
                             </div>
                         </div>
+                        {# --- END Premium Card --- #}
+                    
+                        {# --- Telegram Group Card THIRD --- #}
+                        <div class="card mb-4 reconquest-banner" style="border-left: 4px solid #30A4E0; background-color: #ffffff;">
+                            <div class="card-body p-4 text-center">
+                                <h3 class="mb-3 reconquest-banner-title" style="color: #30A4E0;"><i class="fab fa-telegram-plane me-2"></i> Join Telegram Group</h3>
+                                <p class="mb-3 reconquest-banner-text"> 
+                                    You don't have to go through this alone.<br>
+                                    In my Telegram group, I share important updates, direct insights, and offer exclusive support for those who truly want to turn the tables in their reconquest.<br>
+                                    If you want my help up close, this is the place to be.
+                                </p>
+                                <a href="https://t.me/+ypzmRchOZQtiMmU5" target="_blank" rel="noopener noreferrer" class="btn btn-lg text-white px-4 py-2 reconquest-banner-button" style="background-color: #30A4E0; border-color: #30A4E0;" onclick="gtag('event', 'clique_card_telegram', {'event_category': 'Engajamento', 'event_label': 'Card Telegram Post', 'value': 1});">
+                                     <i class="fab fa-telegram-plane me-1"></i> Join Group
+                                </a>
+                            </div>
+                        </div>
+                        {# --- End Telegram Group Card --- #}
+                    
                     </section>
-                    {# ---------------------------------- #}
+                    <!-- End Sidebar Cards Section -->
                     
                     <!-- Recent Posts Section -->
                     {% if recent_posts %}

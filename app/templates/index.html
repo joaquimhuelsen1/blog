@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<style>
+    /* Specific styles for the index page banner */
+    .reconquest-banner-image {
+        height: 60vh; /* Adjust height as needed */
+        background-size: cover;
+        background-position: center center;
+        position: relative; /* Needed for absolute positioning of content */
+        color: white; /* Default text color for banner content */
+    }
+
+    .reconquest-banner-image::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5); /* Dark overlay */
+        z-index: 1; /* Ensures overlay is above the background image but below content */
+    }
+
+    .reconquest-banner-content {
+        position: relative; /* Ensure content is above the overlay */
+        z-index: 2; /* Higher z-index than the overlay */
+        text-align: center; /* Center align the text */
+        padding: 20px; /* Add some padding */
+        background-color: rgba(0, 0, 0, 0.3); /* Optional: slight background for text readability */
+        border-radius: 8px; /* Optional: rounded corners */
+    }
+
+    .reconquest-banner-title {
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.7); /* Text shadow for better readability */
+    }
+
+    .reconquest-banner-text {
+        font-size: 1.2rem;
+        margin-bottom: 20px; /* Space below the lead text */
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.7); /* Text shadow */
+    }
+
+    .reconquest-banner-button {
+        padding: 10px 25px;
+        font-size: 1.1rem;
+        border-radius: 20px; /* Rounded button */
+        /* Add transition effects if desired */
+    }
+
+    /* Ensure cards have consistent height */
+    .card {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .card-body {
+        flex-grow: 1; /* Allows card body to expand */
+        display: flex;
+        flex-direction: column; /* Stack card content vertically */
+    }
+
+    .card-title {
+        min-height: 3em; /* Example: Allocate space for ~2 lines of title */
+        margin-bottom: 0.5rem;
+    }
+
+    .card-text:not(:last-child) {
+        flex-grow: 1; /* Allows the description text to take up available space */
+        margin-bottom: 1rem; /* Space before the date/author */
+    }
+
+    .card-text small {
+        display: block; /* Ensure the small text is on its own line */
+        margin-bottom: 1rem; /* Space before the read more button */
+    }
+
+    .card .btn {
+        margin-top: auto; /* Pushes the button to the bottom */
+    }
+</style>
+
+<div class="container-fluid p-0">
+    <div class="jumbotron text-center reconquest-banner-image d-flex flex-column justify-content-center align-items-center" style="background-image: url('/static/img/bg-image.webp');">
+        <div class="reconquest-banner-content">
+            <h1 class="display-4 reconquest-banner-title">Welcome to Reconquest Blog</h1>
+            <p class="lead reconquest-banner-text">Your source for insights on technology, personal growth, and more.</p>
+            {% if not current_user.is_authenticated %}
+                <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg reconquest-banner-button" role="button">Join the community</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="container mt-4">
+    <h2>Recent Articles</h2>
+    <div class="row">
+        {% if posts %}
+            {% for post in posts[:6] %} {# Display up to 6 recent posts #}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <img src="{{ post.image_url }}" class="card-img-top" alt="{{ post.title }}" style="height: 200px; object-fit: cover;">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">{{ post.title }}</h5>
+                            <p class="card-text">{{ post.content | striptags | truncate(100) }}</p>
+                            <p class="card-text"><small class="text-muted">By {{ post.author }} on {{ post.date_posted.strftime('%Y-%m-%d') }}</small></p>
+                            <a href="{{ url_for('main.blog_post', slug=post.slug) }}" class="btn btn-outline-primary mt-auto">Read More</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="col">
+                <p>No posts available yet. Check back soon!</p>
+            </div>
+        {% endif %}
+    </div>
+    {% if posts and posts|length > 6 %}
+        <div class="text-center mt-4 mb-4">
+            <a href="{{ url_for('main.blog') }}" class="btn btn-outline-secondary" style="border-radius: 20px; padding: 10px 25px;">View All Posts</a>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %} 

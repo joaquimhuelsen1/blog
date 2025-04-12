@@ -312,6 +312,17 @@ def post(post_id):
              logger.error(f"Erro ao processar posts recentes: {str(e_proc_recent)}")
         # ----------------------------------------------------------------
 
+        # --- Generate Post Slug ---
+        post_slug = None
+        if hasattr(post_obj, 'title') and post_obj.title:
+            # Lowercase, remove non-alphanumeric (except space/hyphen), replace space with hyphen
+            slug_base = post_obj.title.lower()
+            slug_base = re.sub(r'[^\w\s-]', '', slug_base) # Remove non-alphanumeric except space/hyphen
+            post_slug = re.sub(r'\s+', '-', slug_base).strip('-') # Replace space with hyphen
+        else:
+            post_slug = f"post-{post_id_str}" # Fallback slug
+        # -------------------------
+
         # --- PASSO 4: Preparar Formulário de Comentário e Renderizar --- 
         form = CommentForm() # Instanciar o formulário para passar ao template
         
@@ -321,7 +332,8 @@ def post(post_id):
                                is_preview=is_preview,
                              recent_posts=recent_posts_data, 
                                form=form, # Passar o formulário
-                               comments=comments_data) # Passar os comentários obtidos
+                               comments=comments_data, # Passar os comentários obtidos
+                               post_slug=post_slug) # <-- Pass slug to template
                              
     except requests.RequestException as e:
         logger.error(f"Erro de requisição (principal ou recente) no post {post_id_str}: {str(e)}")
