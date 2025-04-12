@@ -1,13 +1,16 @@
+{# Banner for Relationship Consulting Form - Centered Button Layout #}
 <div class="card mb-4 reconquest-banner" style="border-left: 4px solid var(--primary-color); background-color: #ffffff;">
-    <div class="card-body p-4">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h3 class="mb-3 reconquest-banner-title">Let's Find Out If You Still Have a Chance With Her</h3>
-                <p class="mb-md-0 reconquest-banner-text">Hi, I'm Ethan Heyes. I help men like you reconnect with their ex after a breakup — using emotional intelligence, strategy, and psychology. Take my free test to discover your real chances of getting her back… And what your first move should be.</p>
-            </div>
-            <div class="col-md-4 text-center text-md-end">
-                <a href="/reconquest-test" class="btn btn-lg btn-primary px-4 py-2 reconquest-banner-button">Take the test</a>
-            </div>
-        </div>
+    <div class="card-body p-4 text-center">
+        {# Text Content #}
+        <h3 class="mb-3 reconquest-banner-title">Need Personalized Help?</h3>
+        <p class="mb-3 reconquest-banner-text">
+            If you think your story deserves exclusive attention, fill in the form below and I will contact you personally and give you some direction.
+        </p>
+        {# Button #}
+        {# Generate UTM string with new standard #}
+        {% set utm_params = "utm_source=blog&utm_medium=internal&utm_campaign=2025-consultoria&utm_content=" + (utm_content | default('banner-principal')) %}
+        <a href="{{ url_for('main.blog_form') }}?{{ utm_params }}" class="btn btn-lg btn-primary px-4 py-2 reconquest-banner-button">
+             <i class="fas fa-file-alt me-2"></i> Open Consulting Form
+        </a>
     </div>
 </div>
