@@ -27,5 +27,5 @@ ENV PREFERRED_URL_SCHEME=http
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8000/ || exit 1
 
-# CMD para Debugging (usar Flask dev server)
-CMD ["flask", "run", "--host=0.0.0.0", "--port=8000"] 
+# CMD original usando Gunicorn (para produção)
+CMD ["gunicorn", "--config", "gunicorn_config.py", "wsgi:application"] 
