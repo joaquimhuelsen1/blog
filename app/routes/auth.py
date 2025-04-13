@@ -128,7 +128,16 @@ def login():
                      # Determine action based on login_status ("true", "false", or "none")
                      if login_status == 'true':
                          # --- Profile Complete: Log in directly ---
+                         # ADD DETAILED LOGGING BEFORE login_user
+                         logger.info(f"--- Preparing to log in user {user_id} (login=true) ---")
+                         logger.info(f"Webhook Data Received: {result}")
+                         logger.info(f"Processed user_data_from_webhook: {user_data_from_webhook}")
+                         logger.info(f"Value used for flask_user.is_premium: {user_data_from_webhook.get('is_premium')}")
+                         
                          flask_user = User(**user_data_from_webhook)
+                         
+                         logger.info(f"Flask User object created: id={flask_user.id}, email={flask_user.email}, is_premium={flask_user.is_premium}")
+                         
                          login_user(flask_user, remember=True)
                          session.pop('pending_login_user_data', None)
                          session_user_data = user_data_from_webhook.copy()

@@ -135,21 +135,29 @@ def post(post_id):
         logger.info(f"Acessando post com ID: {post_id} (User: {current_user.id if current_user.is_authenticated else 'Guest'})")
         post_id_str = str(post_id)
         
-        webhook_url = os.environ.get('WEBHOOK_GET_POSTS')
+        # Use the SPECIFIC webhook URL for fetching the single post
+        webhook_url = os.environ.get('WEBHOOK_GETSPECIFIC_POSTS') 
         if not webhook_url:
-            logger.error("WEBHOOK_GET_POSTS não configurado para buscar post individual")
+            # Update error message to reflect the specific variable name
+            logger.error("WEBHOOK_GETSPECIFIC_POSTS não configurado para buscar post individual") 
             abort(500, description="Configuration error.")
 
         # --- PASSO 1: Buscar o Post Principal --- 
+        # Check user status before sending webhook request
+        requesting_user_is_premium = current_user.is_authenticated and current_user.is_premium
+        
         webhook_data_main = {
             'event': 'get_single_post',
-            'post_id': post_id_str
+            'post_id': post_id_str,
+            # Add user premium status to the payload
+            'requesting_user_is_premium': requesting_user_is_premium 
         }
-        logger.info(f"Enviando para webhook get_single_post: {webhook_data_main}")
+        # The requests.post call below will now use the specific webhook_url
+        logger.info(f"Enviando para webhook get_single_post (Specific URL): {webhook_data_main}") 
         response_main = requests.post(webhook_url, json=webhook_data_main, timeout=10)
         response_main.raise_for_status()
         response_data_main = response_main.json()
-        logger.info(f"Resposta do webhook get_single_post: {response_data_main}")
+        logger.info(f"Resposta do webhook get_single_post (Specific URL): {response_data_main}")
         
         # The main response should now contain the post AND comments
         # Adjust key if needed, assuming webhook returns {'post': {...}, 'comments': [...]} or similar
@@ -203,107 +211,76 @@ def post(post_id):
         if not hasattr(post_obj, 'author') or not isinstance(post_obj.author, dict):
              post_obj.author = {'username': 'Unknown'} # Fallback as dict
 
-        # === LÓGICA PARA PREVIEW DE POST PREMIUM ===
-        is_preview = False
-        display_content = getattr(post_obj, 'content', '') # Usar getattr para segurança
+        # --- LÓGICA DE PREVIEW REMOVIDA DO FLASK ---
+        # N8n agora envia o conteúdo já truncado (ou completo) e a flag is_preview
+        display_content = getattr(post_obj, 'content', '') # Pega o conteúdo como veio do N8n
+        is_preview = post_data.get('is_preview', False) # Pega a flag como veio do N8n
+        
+        if is_preview:
+             logger.info(f"Flask: Post ID {post_id_str} recebido como preview do N8n.")
+             # Log the exact content being sent to the template when it's a preview
+             logger.debug(f"Flask: Sending truncated display_content to template: {repr(display_content)}") 
+        # REMOVED the block that recalculated display_content based on is_preview
+        # === FIM DA LÓGICA DE PREVIEW NO FLASK ===
 
-        if getattr(post_obj, 'premium_only', False) and not current_user.is_premium:
-            logger.info(f"Usuário não premium acessando post premium ID: {post_id_str}. Gerando preview.")
-            full_content = display_content
-            
-            # 1. Get plain text version (remove HTML tags)
-            plain_text = re.sub('<[^>]*>', '', full_content) # Simple HTML strip
-            plain_len = len(plain_text)
-
-            if plain_len > 0: # Avoid division by zero if content is only HTML
-                # 2. Calculate 25% of plain text
-                target_plain_chars = plain_len // 4 # <-- Changed from // 2 to // 4
-                
-                # 3. Estimate the cutoff point in the original string based on plain text ratio
-                estimated_cutoff = int((target_plain_chars / plain_len) * len(full_content))
-
-                # 4. Refine the cutoff point: find nearest space/newline before the estimated point
-                preview_cutoff = estimated_cutoff
-                space_index = full_content.rfind(' ', max(0, estimated_cutoff - 100), estimated_cutoff)
-                if space_index != -1:
-                    preview_cutoff = space_index
-                else:
-                    # If no space, look for newline
-                    newline_index = full_content.rfind('\n', max(0, estimated_cutoff - 200), estimated_cutoff)
-                    if newline_index != -1:
-                        preview_cutoff = newline_index
-                
-                # Ensure cutoff doesn't exceed original length (edge case)
-                preview_cutoff = min(preview_cutoff, len(full_content))
-
-                # Slice the original content
-                display_content = full_content[:preview_cutoff] + "..."
-                is_preview = True
-            else:
-                # If plain_len is 0, maybe it's just an image? Show a generic preview message or keep original?
-                # For now, let's just show a small part of the original html or a message
-                # If full_content has length, show first N chars, otherwise it's truly empty
-                if len(full_content) > 0:
-                    display_content = full_content[:100] + "..." # Fallback for content with only HTML/scripts
-                    is_preview = True # Still treat as preview
-                else:
-                    # If full_content is also empty, no preview needed
-                    is_preview = False 
-                    
-        # === FIM DA LÓGICA DE PREVIEW ===
-
-        # --- PASSO 3: Buscar Posts Recentes (Nova chamada ao Webhook) --- 
+        # --- PASSO 3: Buscar Posts Recentes (Nova chamada ao Webhook - USES GENERAL URL) --- 
         recent_posts_data = []
         try:
-            webhook_data_recent = {
-                'event': 'get_all_posts', # Reutiliza o evento da home
-                'page': 1,               # Pega a primeira página
-                'per_page': 5,           # Pega 5 para ter margem após filtrar
-                'is_premium': True       # Considera premium para buscar todos relevantes
-            }
-            logger.info(f"Enviando para webhook buscar posts recentes: {webhook_data_recent}")
-            response_recent = requests.post(webhook_url, json=webhook_data_recent, timeout=10)
-            response_recent.raise_for_status()
-            
-            # --- CORREÇÃO: A resposta é um dicionário, não uma lista --- 
-            raw_response_recent = response_recent.json()
-            logger.info(f"DEBUG: Raw Recent Posts Response: {raw_response_recent}")
-            
-            # Remover a verificação de lista:
-            # response_list_recent = response_recent.json()
-            # if response_list_recent and isinstance(response_list_recent, list) and isinstance(response_list_recent[0], dict):
-            #     data_recent = response_list_recent[0]
-            
-            # A resposta já é o dicionário que precisamos
-            if isinstance(raw_response_recent, dict) and 'posts' in raw_response_recent:
-                data_recent = raw_response_recent # Usar diretamente o dicionário recebido
-            # ---------------------------------------------------------
-
-                all_recent_posts = data_recent.get('posts', [])
-                if isinstance(all_recent_posts, dict):
-                    all_recent_posts = [all_recent_posts]
-                
-                logger.info(f"Recebidos {len(all_recent_posts)} posts recentes do webhook.")
-                
-                # Filtrar para remover o post atual e pegar até 4
-                filtered_recent = [p for p in all_recent_posts if p.get('id') != post_id_str][:4]
-                logger.info(f"Posts recentes filtrados: {len(filtered_recent)} posts.")
-                
-                # Processar dados para o template (data formatada, objeto autor)
-                for p in filtered_recent:
-                     if 'created_at' in p:
-                        try:
-                            created_dt = datetime.fromisoformat(p['created_at'].replace('Z', '+00:00'))
-                            p['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
-                        except (ValueError, AttributeError):
-                            p['created_at_formatted'] = 'Data não disponível'
-                     if 'author' in p and isinstance(p['author'], dict):
-                        p['author_obj'] = SimpleNamespace(**p['author'])
-                     else:
-                        p['author_obj'] = SimpleNamespace(username='Desconhecido')
-                recent_posts_data = filtered_recent
+            # Use the GENERAL webhook URL for fetching recent/all posts
+            general_webhook_url = os.environ.get('WEBHOOK_GET_POSTS') 
+            if not general_webhook_url:
+                 logger.error("WEBHOOK_GET_POSTS não configurado para buscar posts recentes")
+                 # Don't abort, just skip fetching recent posts
             else:
-                 logger.error(f"Estrutura inesperada da resposta do webhook para posts recentes (esperado dict com 'posts'): {raw_response_recent}")
+                webhook_data_recent = {
+                    'event': 'get_all_posts', # Reutiliza o evento da home
+                    'page': 1,               # Pega a primeira página
+                    'per_page': 5,           # Pega 5 para ter margem após filtrar
+                    'is_premium': True       # Considera premium para buscar todos relevantes
+                }
+                logger.info(f"Enviando para webhook buscar posts recentes (General URL): {webhook_data_recent}")
+                response_recent = requests.post(general_webhook_url, json=webhook_data_recent, timeout=10) # Use general_webhook_url
+                response_recent.raise_for_status()
+                
+                # --- CORREÇÃO: A resposta é um dicionário, não uma lista --- 
+                raw_response_recent = response_recent.json()
+                logger.info(f"DEBUG: Raw Recent Posts Response: {raw_response_recent}")
+                
+                # Remover a verificação de lista:
+                # response_list_recent = response_recent.json()
+                # if response_list_recent and isinstance(response_list_recent, list) and isinstance(response_list_recent[0], dict):
+                #     data_recent = response_list_recent[0]
+                
+                # A resposta já é o dicionário que precisamos
+                if isinstance(raw_response_recent, dict) and 'posts' in raw_response_recent:
+                    data_recent = raw_response_recent # Usar diretamente o dicionário recebido
+                # ---------------------------------------------------------
+
+                    all_recent_posts = data_recent.get('posts', [])
+                    if isinstance(all_recent_posts, dict):
+                        all_recent_posts = [all_recent_posts]
+                    
+                    logger.info(f"Recebidos {len(all_recent_posts)} posts recentes do webhook.")
+                    
+                    # Filtrar para remover o post atual e pegar até 4
+                    filtered_recent = [p for p in all_recent_posts if p.get('id') != post_id_str][:4]
+                    logger.info(f"Posts recentes filtrados: {len(filtered_recent)} posts.")
+                    
+                    # Processar dados para o template (data formatada, objeto autor)
+                    for p in filtered_recent:
+                         if 'created_at' in p:
+                            try:
+                                created_dt = datetime.fromisoformat(p['created_at'].replace('Z', '+00:00'))
+                                p['created_at_formatted'] = created_dt.strftime('%m/%d/%Y')
+                            except (ValueError, AttributeError):
+                                p['created_at_formatted'] = 'Data não disponível'
+                         if 'author' in p and isinstance(p['author'], dict):
+                            p['author_obj'] = SimpleNamespace(**p['author'])
+                         else:
+                            p['author_obj'] = SimpleNamespace(username='Desconhecido')
+                    recent_posts_data = filtered_recent
+                else:
+                     logger.error(f"Estrutura inesperada da resposta do webhook para posts recentes (esperado dict com 'posts'): {raw_response_recent}")
             
         except requests.RequestException as e_recent:
             logger.error(f"Erro ao buscar posts recentes via webhook: {str(e_recent)}")
@@ -326,6 +303,9 @@ def post(post_id):
         # --- PASSO 4: Preparar Formulário de Comentário e Renderizar --- 
         form = CommentForm() # Instanciar o formulário para passar ao template
         
+        # Log content just before rendering, regardless of preview status, for comparison
+        logger.debug(f"Flask: Final display_content before render_template: {repr(display_content)}")
+
         return render_template('public/post.html', 
                                post=post_obj, 
                                display_content=display_content,
@@ -815,7 +795,7 @@ def member_consulting_form():
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK não configurado.")
             # REMOVED flash message here as well, WTForms will handle field errors
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
         try:
             logger.info(f"Enviando dados do formulário para o webhook: {webhook_url}")
@@ -838,24 +818,24 @@ def member_consulting_form():
             return render_template('forms/member_form.html', 
                                    submission_success=True, 
                                    success_message=success_message,
-                                   form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+                                   form_action_endpoint=form_action_endpoint)
 
         except requests.RequestException as e:
             logger.error(f"Erro ao enviar formulário para o webhook: {e}")
             # REMOVED flash message for webhook error
             # Re-render form; WTForms errors (if any) will show.
             # Consider adding a generic error message if needed, but not via flash.
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
         except Exception as e:
              logger.error(f"Erro inesperado ao processar formulário: {e}")
              logger.error(traceback.format_exc())
              # REMOVED flash message for unexpected error
              # Re-render form
-             return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+             return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
     # If GET or validation fails (POST)
     # Validation errors will be displayed by the template below the fields
-    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
 # --- ADJUST EMAIL MARKETING FORM ROUTE --- 
 @main_bp.route('/form/emailmarketing', methods=['GET', 'POST'])
@@ -901,7 +881,7 @@ def email_marketing_form():
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
             # Re-render the member form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
         try:
             logger.info(f"Enviando dados do formulário (emailmarketing source) para: {webhook_url}")
@@ -922,21 +902,21 @@ def email_marketing_form():
             return render_template('forms/member_form.html', 
                                    submission_success=True, 
                                    success_message=success_message, # Pass the LONG message
-                                   form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+                                   form_action_endpoint=form_action_endpoint)
 
         except requests.RequestException as e:
             logger.error(f"Erro ao enviar formulário (emailmarketing source): {e}")
             # Re-render MEMBER form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
         except Exception as e:
             logger.error(f"Erro inesperado no formulário (emailmarketing source): {e}")
             logger.error(traceback.format_exc())
             # Re-render MEMBER form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
     # If GET or validation fails
     # Render the MEMBER form template
-    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
 
 # --- ADD BLOG FORM ROUTE --- 
 @main_bp.route('/form/blog', methods=['GET', 'POST'])

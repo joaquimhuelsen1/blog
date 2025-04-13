@@ -14,13 +14,13 @@
                 
                 <!-- Premium Status & Manage Subscription -->
                 {% if current_user.is_authenticated and current_user.is_premium %}
-                <div class="alert alert-success text-center mb-4">
+                <div class="text-center mb-4 p-3 border rounded bg-light">
                     <i class="fas fa-crown fa-2x mb-2 text-warning"></i>
                     <h5>Premium Account</h5>
-                    <p class="mb-2">You have access to all premium content.</p>
-                    <form action="{{ url_for('payments.customer_portal') }}" method="POST" class="d-inline-block">
+                    <p class="mb-2 text-muted small">You have access to all premium content.</p>
+                    <form action="{{ url_for('payments.customer_portal') }}" method="POST" class="d-inline-block mt-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                         <button type="submit" class="btn btn-sm btn-outline-success">
+                         <button type="submit" class="btn btn-outline-primary btn-sm">
                             <i class="fas fa-credit-card"></i> Manage Subscription
                         </button>
                     </form>
