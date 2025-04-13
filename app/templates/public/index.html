@@ -9,7 +9,7 @@
     <hr class="my-4">
     <p class="lead">Learn what really works to bring your ex back with dignity and emotional intelligence.</p>
     {% if not current_user.is_authenticated %}
-    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.register') }}" role="button">Register</a>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.login') }}" role="button">Login</a>
     {% endif %}
 </div>
 

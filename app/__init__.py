@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, session, g, redirect, url_for, flash
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 # Importar Flask-Migrate condicionalmente
 import importlib.util
 # from flask_session import Session
@@ -62,6 +62,25 @@ load_dotenv(override=True)
 # Initialize extensions OUTSIDE create_app
 csrf = CSRFProtect() # Initialize CSRF here
 # ... (initialize other extensions like login_manager, mail, Session here if needed for import)
+
+# Define public endpoints (no login required)
+# Add endpoints for auth, payments, static files, and the specific forms
+PUBLIC_ENDPOINTS = {
+    'static',
+    'auth.login',
+    'auth.complete_profile',
+    'auth.logout', # Logout should be accessible even if technically login required
+    'main.premium_subscription', # Page explaining premium
+    'payments.create_checkout_session', # Needs login eventually, but initial POST might not require it depending on flow
+    'payments.checkout_success',
+    'payments.checkout_cancel',
+    'payments.stripe_webhook',
+    'main.blog_form', 
+    'main.member_consulting_form', 
+    'main.email_marketing_form',
+    # Add any other essential public endpoints like error handlers if needed
+    # 'errors.page_not_found', 'errors.internal_server_error' # Example if error blueprints exist
+}
 
 def create_app():
     """Create and configure the Flask application."""
@@ -184,18 +203,34 @@ def create_app():
                 
     # Configurar login manager
     login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'Please log in to access this page.'
-    login_manager.login_message_category = 'info'
+    login_manager.login_message = 'You must be logged in to access this page.'
+    login_manager.login_message_category = 'warning'
     
-    # Configurar manipulação de erro de transação pendente
+    # Hook to check login before most requests
     @app.before_request
-    def check_for_pending_transactions():
-        """Verifica e reverte qualquer transação pendente antes da requisição."""
-        try:
-            db.session.rollback()
-        except:
-            pass  # Ignorar erros durante o rollback
-    
+    def require_login():
+        # Check if endpoint is defined (might not be for direct static file access sometimes)
+        if not request.endpoint:
+            return
+            
+        # Check if the requested endpoint is public
+        if request.endpoint in PUBLIC_ENDPOINTS:
+            return # Allow access to public endpoints
+
+        # Check if user is authenticated
+        if not current_user.is_authenticated:
+            # Store the intended URL (including UTMs)
+            session['next_url'] = request.url
+            flash(login_manager.login_message, login_manager.login_message_category)
+            logger.warning(f"Unauthorized access attempt to {request.endpoint}. Redirecting to login.")
+            # Redirect to login page, PASSING original query parameters (like UTMs)
+            login_url = url_for(login_manager.login_view, **request.args)
+            return redirect(login_url)
+            
+        # If endpoint is not public and user is authenticated, proceed
+        # (Optional: Add role checks here if needed)
+        logger.debug(f"User {current_user.id} accessing protected endpoint: {request.endpoint}")
+
     # Registrar blueprints
     registered_count = 0
     try:

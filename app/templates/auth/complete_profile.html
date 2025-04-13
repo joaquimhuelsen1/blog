@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}Complete Profile - Relationship Blog{% endblock %}
+
+{% block content %}
+{# Reuse the same styles from login_email.html #}
+<style>
+  html, body {
+    height: 100%;
+    background-color: #f8f9fa;
+  }
+  .login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1rem;
+  }
+  .login-card {
+    max-width: 400px;
+    width: 100%;
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+  }
+  .login-card .card-body {
+      padding: 2.5rem 2rem;
+  }
+  .login-logo {
+      max-width: 60px;
+      margin-bottom: 1.5rem;
+  }
+  .login-brand-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      color: #343a40;
+  }
+  .login-main-title {
+      font-weight: 700;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+      color: #212529;
+  }
+  .login-subtitle {
+      color: #6c757d;
+      margin-bottom: 2.5rem;
+      font-size: 0.95rem;
+  }
+  .login-card .form-label {
+      font-weight: 500;
+      margin-bottom: 0.3rem;
+      font-size: 0.85rem;
+      color: #495057;
+  }
+   .login-card .form-control {
+      height: calc(1.5em + 0.9rem + 2px);
+      padding: 0.45rem 0.9rem;
+      font-size: 0.95rem;
+      border: 1px solid #ced4da;
+  }
+  .login-card .input-group-text {
+      background-color: #e9ecef;
+      border: 1px solid #ced4da;
+  }
+  .btn-signin {
+      background-color: #C50100; /* Use same red color */
+      border-color: #C50100;
+      color: white;
+      padding: 0.6rem 1rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border-radius: 0.3rem;
+      text-transform: uppercase;
+  }
+  .btn-signin:hover {
+      background-color: #a50100;
+      border-color: #940100;
+      color: white;
+  }
+  .support-link {
+      font-size: 0.85rem;
+      color: #C50100;
+      text-decoration: none;
+  }
+   .support-link:hover {
+      text-decoration: underline;
+  }
+</style>
+
+<div class="login-container">
+    <div class="card login-card">
+        <div class="card-body text-center">
+            
+            <img src="https://reconquestyourex.com/wp-content/uploads/2025/03/fivicon2.png" alt="Relationship Blog Logo" class="login-logo">
+            
+            <h4 class="login-brand-title">Relationship Blog</h4>
+            <h5 class="login-main-title">Complete Your Profile</h5>
+            <p class="login-subtitle">Just a few more details for your account ({{ email }})</p>
+
+            {% include '_messages.html' %} {# Keep flash messages #}
+
+            <form method="POST" action="{{ url_for('auth.complete_profile') }}" novalidate class="text-start">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                {# Username Field #}
+                <div class="form-group mb-3">
+                    {{ form.username.label(class="form-label") }}
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="far fa-user"></i></span>
+                        {{ form.username(class="form-control", autofocus=True, placeholder='Choose a public username') }}
+                    </div>
+                    {% for error in form.username.errors %}
+                        <small class="text-danger d-block mt-1" style="font-size: 0.8rem;">{{ error }}</small>
+                    {% endfor %}
+                </div>
+                
+                {# Age Field #}
+                <div class="form-group mb-3">
+                    {{ form.age.label(class="form-label") }}
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="far fa-calendar-alt"></i></span>
+                        {{ form.age(class="form-control", placeholder='Your age', type='number') }}
+                     </div>
+                     {% for error in form.age.errors %}
+                        <small class="text-danger d-block mt-1" style="font-size: 0.8rem;">{{ error }}</small>
+                    {% endfor %}
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    <button type="submit" class="btn btn-signin">SAVE PROFILE</button> 
+                </div>
+            </form>
+            
+             {# Optional: Add support link if desired #}
+             <div class="mt-4 text-center">
+                 <a href="mailto:ethan@thereconquestmap.com" class="support-link">Need help? Contact support</a>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endblock %} 

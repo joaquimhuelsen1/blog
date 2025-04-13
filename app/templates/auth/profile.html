@@ -1,81 +1,74 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Profile - Reconquest Blog{% endblock %}
+{% block title %}Profile - Reconquest Blog{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-md-6 offset-md-3">
-        <div class="card">
+        <div class="card shadow-sm">
             <div class="card-header text-center" style="background-color: #F1F1F1;">
-                <h4 class="m-0" style="color: #000000; font-weight: 500;">Edit Profile</h4>
+                <h4 class="m-0" style="color: #000000; font-weight: 500;">Your Profile</h4>
             </div>
             <div class="card-body">
-                {# REMOVED Premium Status Section 
-                <div class="mb-4 text-center">
-                    {% if user_info.is_premium %}
-                        <div class="alert alert-success">
-                            <i class="fas fa-crown fa-2x mb-2"></i>
-                            <h5>Conta Premium</h5>
-                            <p class="mb-0">Você tem acesso a todo o conteúdo premium.</p>
-                            <p class="mb-0">Obrigado por apoiar nossa plataforma!</p>
-                        </div>
-                    {% endif %}
-                </div>
-                #}
+                {% include '_messages.html' %}
                 
-                <!-- Botão de Gerenciar Assinatura (Apenas para Premium) -->
+                <!-- Premium Status & Manage Subscription -->
                 {% if current_user.is_authenticated and current_user.is_premium %}
-                <div class="mb-4 text-center">
-                    <form action="{{ url_for('payments.customer_portal') }}" method="POST">
+                <div class="alert alert-success text-center mb-4">
+                    <i class="fas fa-crown fa-2x mb-2 text-warning"></i>
+                    <h5>Premium Account</h5>
+                    <p class="mb-2">You have access to all premium content.</p>
+                    <form action="{{ url_for('payments.customer_portal') }}" method="POST" class="d-inline-block">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                         <button type="submit" class="btn btn-outline-danger">
+                         <button type="submit" class="btn btn-sm btn-outline-success">
                             <i class="fas fa-credit-card"></i> Manage Subscription
                         </button>
                     </form>
                 </div>
                 {% endif %}
+                
+                {# Display User Information (Read-Only) #}
+                <dl class="row">
+                    <dt class="col-sm-4">Username:</dt>
+                    <dd class="col-sm-8">{{ current_user.username if current_user.username else 'Not set' }}</dd>
 
+                    <dt class="col-sm-4">Email:</dt>
+                    <dd class="col-sm-8">{{ current_user.email }}</dd>
+
+                    <dt class="col-sm-4">Age:</dt>
+                    <dd class="col-sm-8">{{ current_user.age if current_user.age else 'Not set' }}</dd>
+                    
+                    {# Add Account Status #}
+                    <dt class="col-sm-4">Account Status:</dt>
+                    <dd class="col-sm-8">
+                        {% if current_user.is_premium %}
+                            <span class="badge bg-warning text-dark">Premium</span>
+                        {% else %}
+                            <span class="badge bg-secondary me-2">Free</span>
+                            <a href="{{ url_for('main.premium_subscription') }}" class="btn btn-sm btn-warning"> 
+                                <i class="fas fa-crown me-1"></i> Upgrade to Premium
+                            </a>
+                        {% endif %}
+                    </dd>
+                    
+                    {# Add other fields if desired, e.g., AI Credits #}
+                    {# 
+                    <dt class="col-sm-4">AI Credits:</dt>
+                    <dd class="col-sm-8">{{ current_user.ai_credits }}</dd>
+                    #}
+                </dl>
+
+                {# Remove the old form completely #}
+                {# 
                 <form method="POST" action="{{ url_for('auth.profile') }}">
                     {{ form.hidden_tag() }}
-                    
-                    <div class="mb-3">
-                        {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control", readonly=true, style="background-color: #f8f9fa;") }}
-                        <small class="form-text text-muted">Username cannot be changed.</small>
-                        {% for error in form.username.errors %}
-                            <span class="text-danger">{{ error }}</span>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control", readonly=true, style="background-color: #f8f9fa;") }}
-                        <small class="form-text text-muted">Email cannot be changed.</small>
-                        {% for error in form.email.errors %}
-                            <span class="text-danger">{{ error }}</span>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.age.label(class="form-label") }}
-                        {{ form.age(class="form-control", type="number", min="18", max="120") }}
-                        <small class="form-text text-muted">Only your age can be updated.</small>
-                        {% for error in form.age.errors %}
-                            <span class="text-danger">{{ error }}</span>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="d-grid">
-                        {{ form.submit(class="btn", style="background-color: #C60000; color: white;", value="Update Profile") }}
-                    </div>
+                    ...
                 </form>
+                #}
                 
-                <!-- Seção de alteração de senha temporariamente removida -->
             </div>
-            <div class="card-footer">
-                <div class="text-center mt-2">
-                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Back to Blog</a>
-                </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('main.index') }}" class="btn btn-secondary">Back to Blog</a>
             </div>
         </div>
     </div>

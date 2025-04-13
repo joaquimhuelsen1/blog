@@ -1,12 +1,11 @@
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app import login_manager
 import uuid
 from flask import session
 
 class User(UserMixin):
-    def __init__(self, id=None, username=None, email=None, is_admin=False, is_premium=False, age=None, ai_credits=0):
+    def __init__(self, id=None, username=None, email=None, is_admin=False, is_premium=False, age=None, ai_credits=0, profile_complete=False):
         self.id = id
         self.username = username
         self.email = email
@@ -14,6 +13,7 @@ class User(UserMixin):
         self.is_premium = is_premium
         self.age = age
         self.ai_credits = ai_credits
+        self.profile_complete = profile_complete
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -37,12 +37,6 @@ class User(UserMixin):
         """Retorna False pois temos apenas usuários autenticados"""
         return False
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-    
     def update_ai_credits(self):
         """Atualiza os créditos da IA baseado no status premium do usuário, apenas se necessário"""
         print(f"[DEBUG] Verificando créditos para {self.username}: atual={self.ai_credits}")
@@ -84,7 +78,8 @@ def load_user(id):
                 is_admin=user_data.get('is_admin', False),
                 is_premium=user_data.get('is_premium', False),
                 age=user_data.get('age'),
-                ai_credits=user_data.get('ai_credits', 0)
+                ai_credits=user_data.get('ai_credits', 0),
+                profile_complete=user_data.get('profile_complete', False)
             )
         return None
     except Exception as e:
