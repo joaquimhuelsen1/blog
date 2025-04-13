@@ -68,7 +68,7 @@ def login():
         email = form.email.data.lower().strip()
         webhook_url = os.environ.get('EMAIL_VALIDATION_WEBHOOK_URL')
 
-                if not webhook_url:
+        if not webhook_url:
             logger.error("EMAIL_VALIDATION_WEBHOOK_URL not configured.")
             flash('Login service is temporarily unavailable. Please try again later.', 'danger')
             return render_template('auth/login_email.html', form=form)
@@ -85,7 +85,7 @@ def login():
             response = requests.post(webhook_url, json=payload, timeout=15)
             response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
             
-                    response_data = response.json()
+            response_data = response.json()
             logger.info(f"Webhook response for {email}: {response_data}")
 
             # --- Process Webhook Response (New Logic v2) ---
@@ -152,7 +152,7 @@ def login():
                          # --- Profile Incomplete: Redirect to complete profile ---
                          logger.info(f"Email validated for {email} (login={login_status}), redirecting to complete profile.")
                          session['pending_login_user_data'] = user_data_from_webhook
-                        session.modified = True
+                         session.modified = True
                          flash('Welcome! Please complete your profile.', 'info')
                          session['next_url_after_profile'] = session.pop('next_url', None)
                          return redirect(url_for('auth.complete_profile'))
@@ -165,7 +165,7 @@ def login():
                  elif webhook_status is False: # Email not found
                      error_message = result.get('message', 'Email not found, please check and try again.')
                      logger.warning(f"Login failed for {email} (status:false): {error_message}")
-                        flash(error_message, 'danger')
+                     flash(error_message, 'danger')
 
                  else: # Status is neither True nor False (unexpected)
                      logger.error(f"Webhook returned unexpected 'status' value for {email}: {webhook_status}. Response: {result}")
@@ -178,10 +178,10 @@ def login():
         except requests.Timeout:
             logger.error(f"Timeout connecting to email validation webhook for {email}")
             flash('Login service timed out. Please try again later.', 'warning')
-                except requests.RequestException as e:
+        except requests.RequestException as e:
             logger.error(f"Network error during email validation for {email}: {e}")
             flash('Could not connect to login service. Please try again.', 'danger')
-                except Exception as e:
+        except Exception as e:
             logger.error(f"Unexpected error during login for {email}: {e}", exc_info=True)
             flash('An unexpected error occurred during login.', 'danger')
 
@@ -195,7 +195,7 @@ def complete_profile():
     pending_data = session.get('pending_login_user_data')
     if not pending_data or not pending_data.get('id'):
         flash('Invalid session. Please log in again.', 'warning')
-                        return redirect(url_for('auth.login'))
+        return redirect(url_for('auth.login'))
 
     form = CompleteProfileForm()
     if form.validate_on_submit():
@@ -205,7 +205,7 @@ def complete_profile():
         email = pending_data.get('email') # Get email from pending data
 
         webhook_url = os.environ.get('PROFILE_UPDATE_WEBHOOK_URL')
-                if not webhook_url:
+        if not webhook_url:
             logger.error("PROFILE_UPDATE_WEBHOOK_URL not configured.")
             flash('Profile update service is temporarily unavailable.', 'danger')
             return render_template('auth/complete_profile.html', form=form)
@@ -223,18 +223,18 @@ def complete_profile():
                 'utm_parameters': utm_data # Add UTM data to payload
             }
             response = requests.post(webhook_url, json=payload, timeout=15)
-                    response.raise_for_status()
+            response.raise_for_status()
             
-                    response_data = response.json()
+            response_data = response.json()
             logger.info(f"Webhook response for profile update {user_id}: {response_data}")
 
             # --- Process Webhook Response (v2) ---
             result = None
             # Accept EITHER a list containing a dict OR a dict directly
-                    if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
+            if isinstance(response_data, list) and len(response_data) > 0 and isinstance(response_data[0], dict):
                 result = response_data[0] # It's a list containing a dict
                 logger.info(f"Profile update webhook response format for {user_id}: List containing dictionary.")
-                    elif isinstance(response_data, dict):
+            elif isinstance(response_data, dict):
                 result = response_data # It's a dictionary directly
                 logger.info(f"Profile update webhook response format for {user_id}: Dictionary directly.")
 
@@ -247,8 +247,8 @@ def complete_profile():
                      logger.info(f"Profile successfully updated via webhook for {user_id}.")
                      
                      # Create Flask User object with updated info
-                        flask_user = User(
-                            id=user_id,
+                     flask_user = User(
+                         id=user_id,
                          email=email,
                          username=username, # Use the submitted username
                          is_admin=bool(pending_data.get('is_admin', False)),
@@ -256,22 +256,22 @@ def complete_profile():
                          age=age, # Use the submitted age
                          ai_credits=int(pending_data.get('ai_credits', 0)),
                          profile_complete=True # Mark as complete
-                        )
-                        login_user(flask_user, remember=True)
+                     )
+                     login_user(flask_user, remember=True)
                      session.pop('pending_login_user_data', None) # Clean up temp data
 
                      # Store final user data in session
-                        session['user_data'] = {
-                            'id': str(flask_user.id),
-                            'username': flask_user.username,
-                            'email': flask_user.email,
-                            'is_admin': flask_user.is_admin,
-                            'is_premium': flask_user.is_premium,
-                            'age': flask_user.age,
-                            'ai_credits': flask_user.ai_credits,
+                     session['user_data'] = {
+                         'id': str(flask_user.id),
+                         'username': flask_user.username,
+                         'email': flask_user.email,
+                         'is_admin': flask_user.is_admin,
+                         'is_premium': flask_user.is_premium,
+                         'age': flask_user.age,
+                         'ai_credits': flask_user.ai_credits,
                          'profile_complete': True
-                        }
-                        session.modified = True
+                     }
+                     session.modified = True
 
                      flash('Profile completed successfully! You are now logged in.', 'success')
                      next_page = session.pop('next_url_after_profile', None) or url_for('main.index')
@@ -288,10 +288,10 @@ def complete_profile():
         except requests.Timeout:
             logger.error(f"Timeout connecting to profile update webhook for {user_id}")
             flash('Profile update service timed out. Please try again later.', 'warning')
-                except requests.RequestException as e:
+        except requests.RequestException as e:
             logger.error(f"Network error during profile update for {user_id}: {e}")
             flash('Could not connect to profile update service. Please try again.', 'danger')
-                except Exception as e:
+        except Exception as e:
             logger.error(f"Unexpected error during profile update for {user_id}: {e}", exc_info=True)
             flash('An unexpected error occurred during profile update.', 'danger')
             
