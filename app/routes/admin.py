@@ -356,21 +356,26 @@ def create_post():
             response_data = response.json()
             logger.info(f"Resposta do webhook CREATE_POST: {response_data}")
             # Ajustar verificação de sucesso conforme a resposta real do webhook
-            if isinstance(response_data, dict) and response_data.get('success'):
-                flash('Post criado com sucesso!', 'success')
+            if isinstance(response_data, dict) and response_data.get('status') is True:
+                # flash('Post criado com sucesso!', 'success') # Mensagem antiga
+                flash("Post enviado com sucesso e aguardando processamento.", "success")
                 session.pop('admin_posts', None) # Limpar cache da sessão
-                return redirect(url_for('admin.dashboard'))
+                # Re-renderizar o formulário (limpo) com a mensagem de sucesso
+                new_form = PostForm() # Cria um novo formulário vazio
+                return render_template('admin/create_post.html', form=new_form)
             else:
-                error_msg = response_data.get('message', 'Resposta inválida do webhook') if isinstance(response_data, dict) else 'Resposta inválida do webhook'
+                error_msg = response_data.get('message', 'Resposta inválida ou status não é true') if isinstance(response_data, dict) else 'Resposta inválida do webhook'
                 flash(f'Erro ao criar post: {error_msg}', 'danger')
+                # Re-renderiza com os dados atuais do formulário para correção
                 return render_template('admin/create_post.html', form=form)
             
         except requests.RequestException as e:
-            flash(f'Erro ao criar post via webhook: {str(e)}', 'danger')
+            flash(f'Erro de rede ao enviar post via webhook: {str(e)}', 'danger')
             return render_template('admin/create_post.html', form=form)
         except Exception as e:
-            flash(f'Erro ao criar post: {str(e)}', 'danger')
-            print(f"ERRO ao criar post: {str(e)}")
+            flash(f'Erro inesperado ao processar criação do post: {str(e)}', 'danger')
+            logger.error(f"ERRO ao criar post: {str(e)}")
+            logger.error(traceback.format_exc()) # Log completo
             return render_template('admin/create_post.html', form=form)
     
     return render_template('admin/create_post.html', form=form)

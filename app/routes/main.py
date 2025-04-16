@@ -795,7 +795,7 @@ def member_consulting_form():
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK não configurado.")
             # REMOVED flash message here as well, WTForms will handle field errors
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
         try:
             logger.info(f"Enviando dados do formulário para o webhook: {webhook_url}")
@@ -818,24 +818,24 @@ def member_consulting_form():
             return render_template('forms/member_form.html', 
                                    submission_success=True, 
                                    success_message=success_message,
-                                   form_action_endpoint=form_action_endpoint)
+                                   form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
         except requests.RequestException as e:
             logger.error(f"Erro ao enviar formulário para o webhook: {e}")
             # REMOVED flash message for webhook error
             # Re-render form; WTForms errors (if any) will show.
             # Consider adding a generic error message if needed, but not via flash.
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
         except Exception as e:
              logger.error(f"Erro inesperado ao processar formulário: {e}")
              logger.error(traceback.format_exc())
              # REMOVED flash message for unexpected error
              # Re-render form
-             return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+             return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
     # If GET or validation fails (POST)
     # Validation errors will be displayed by the template below the fields
-    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
 # --- ADJUST EMAIL MARKETING FORM ROUTE --- 
 @main_bp.route('/form/emailmarketing', methods=['GET', 'POST'])
@@ -881,7 +881,7 @@ def email_marketing_form():
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
             # Re-render the member form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
         try:
             logger.info(f"Enviando dados do formulário (emailmarketing source) para: {webhook_url}")
@@ -902,28 +902,28 @@ def email_marketing_form():
             return render_template('forms/member_form.html', 
                                    submission_success=True, 
                                    success_message=success_message, # Pass the LONG message
-                                   form_action_endpoint=form_action_endpoint)
+                                   form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
         except requests.RequestException as e:
             logger.error(f"Erro ao enviar formulário (emailmarketing source): {e}")
             # Re-render MEMBER form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
         except Exception as e:
             logger.error(f"Erro inesperado no formulário (emailmarketing source): {e}")
             logger.error(traceback.format_exc())
             # Re-render MEMBER form template with error
-            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+            return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
     # If GET or validation fails
     # Render the MEMBER form template
-    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint)
+    return render_template('forms/member_form.html', form=form, submission_success=False, form_action_endpoint=form_action_endpoint, hide_header=True, hide_footer=True)
 
 # --- ADD BLOG FORM ROUTE --- 
 @main_bp.route('/form/blog', methods=['GET', 'POST'])
 def blog_form():
     logger.info("--- Executando a rota blog_form() ---") # Add log here
     # Use the MemberConsultingForm for this route as well
-    form = MemberConsultingForm() 
+    form = MemberConsultingForm()
     form_action_endpoint = 'main.blog_form' # Define endpoint name for THIS route
 
     # Capture UTMs on GET (same logic)
@@ -959,8 +959,8 @@ def blog_form():
             # --------------------- 
         }
 
-        # Use the SAME webhook URL 
-        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK') 
+        # Use the SAME webhook URL
+        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK')
 
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
@@ -983,9 +983,9 @@ def blog_form():
             # ----------------------------------
             
             # Re-render the MEMBER form template with the LONG success message
-            return render_template('forms/member_form.html', 
-                                   submission_success=True, 
-                                   success_message=success_message, 
+            return render_template('forms/member_form.html',
+                                   submission_success=True,
+                                   success_message=success_message,
                                    form_action_endpoint=form_action_endpoint)
 
         except requests.RequestException as e:
