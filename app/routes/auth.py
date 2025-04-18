@@ -62,7 +62,7 @@ def is_safe_url(target):
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
-        
+
     form = EmailLoginForm()
     if form.validate_on_submit():
         email = form.email.data.lower().strip()
@@ -78,13 +78,13 @@ def login():
             # Get UTM data from session, default to empty dict if not found
             utm_data = session.get('utm_data', {})
             payload = {
-                'email': email, 
+                'email': email,
                 'event': 'validate_email',
                 'utm_parameters': utm_data # Add UTM data to payload
             }
             response = requests.post(webhook_url, json=payload, timeout=15)
             response.raise_for_status() # Raise exception for bad status codes (4xx or 5xx)
-            
+
             response_data = response.json()
             logger.info(f"Webhook response for {email}: {response_data}")
 
@@ -105,7 +105,7 @@ def login():
                      # IMPORTANT: Assuming webhook sends an 'id' field
                      user_id = result.get('id')
                      # Handle None value for login status from webhook
-                     login_value = result.get('login') 
+                     login_value = result.get('login')
                      login_status = str(login_value).lower() if login_value is not None else 'none' # Handle None case -> "none"
 
                      if not user_id:
@@ -133,11 +133,11 @@ def login():
                          logger.info(f"Webhook Data Received: {result}")
                          logger.info(f"Processed user_data_from_webhook: {user_data_from_webhook}")
                          logger.info(f"Value used for flask_user.is_premium: {user_data_from_webhook.get('is_premium')}")
-                         
+
                          flask_user = User(**user_data_from_webhook)
-                         
+
                          logger.info(f"Flask User object created: id={flask_user.id}, email={flask_user.email}, is_premium={flask_user.is_premium}")
-                         
+
                          login_user(flask_user, remember=True)
                          session.pop('pending_login_user_data', None)
                          session_user_data = user_data_from_webhook.copy()
@@ -147,7 +147,7 @@ def login():
                          logger.info(f"Successful login for {email} (login=true).")
                          next_page = session.pop('next_url', None) or url_for('main.index')
                          return redirect(next_page if is_safe_url(next_page) else url_for('main.index'))
-                     
+
                      elif login_status == 'false' or login_status == 'none': # Treat "false" or None/null as incomplete
                          # --- Profile Incomplete: Redirect to complete profile ---
                          logger.info(f"Email validated for {email} (login={login_status}), redirecting to complete profile.")
@@ -156,7 +156,7 @@ def login():
                          flash('Welcome! Please complete your profile.', 'info')
                          session['next_url_after_profile'] = session.pop('next_url', None)
                          return redirect(url_for('auth.complete_profile'))
-                     
+
                      else: # login status is something else unexpected
                          logger.error(f"Webhook success (status:true) but invalid 'login' status '{result.get('login')}' for {email}. Response: {result}")
                          flash('Login failed: Unexpected user status received.', 'danger')
@@ -170,7 +170,7 @@ def login():
                  else: # Status is neither True nor False (unexpected)
                      logger.error(f"Webhook returned unexpected 'status' value for {email}: {webhook_status}. Response: {result}")
                      flash('Login failed due to unexpected server response [status].', 'danger')
-            
+
             else: # Unexpected response format (neither list[dict] nor dict)
                 logger.error(f"Unexpected webhook response format for {email}. Expected list or dict, got: {type(response_data)} Content: {response_data}")
                 flash('Login failed due to unexpected server response [format].', 'danger')
@@ -224,7 +224,7 @@ def complete_profile():
             }
             response = requests.post(webhook_url, json=payload, timeout=15)
             response.raise_for_status()
-            
+
             response_data = response.json()
             logger.info(f"Webhook response for profile update {user_id}: {response_data}")
 
@@ -240,12 +240,12 @@ def complete_profile():
 
             if result: # If we successfully extracted/found the result dictionary
                  # Check the status field within the result dictionary (expecting boolean True for success)
-                 webhook_status = result.get('status') 
+                 webhook_status = result.get('status')
 
                  if webhook_status is True: # Use the boolean status directly
                      # --- Profile Updated Successfully: Log in user ---
                      logger.info(f"Profile successfully updated via webhook for {user_id}.")
-                     
+
                      # Create Flask User object with updated info
                      flask_user = User(
                          id=user_id,
@@ -294,7 +294,7 @@ def complete_profile():
         except Exception as e:
             logger.error(f"Unexpected error during profile update for {user_id}: {e}", exc_info=True)
             flash('An unexpected error occurred during profile update.', 'danger')
-            
+
     # GET request or form validation failed
     # Pass flags to hide header/footer
     return render_template('auth/complete_profile.html', form=form, email=pending_data.get('email'), hide_header=True, hide_footer=True)

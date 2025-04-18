@@ -232,6 +232,7 @@ def post(post_id):
                  logger.error("WEBHOOK_GET_POSTS não configurado para buscar posts recentes")
                  # Don't abort, just skip fetching recent posts
             else:
+                # --- Início do bloco que precisa ser indentado ---
                 webhook_data_recent = {
                     'event': 'get_all_posts', # Reutiliza o evento da home
                     'page': 1,               # Pega a primeira página
@@ -241,31 +242,26 @@ def post(post_id):
                 logger.info(f"Enviando para webhook buscar posts recentes (General URL): {webhook_data_recent}")
                 response_recent = requests.post(general_webhook_url, json=webhook_data_recent, timeout=10) # Use general_webhook_url
                 response_recent.raise_for_status()
-                
+
                 # --- CORREÇÃO: A resposta é um dicionário, não uma lista --- 
                 raw_response_recent = response_recent.json()
                 logger.info(f"DEBUG: Raw Recent Posts Response: {raw_response_recent}")
-                
-                # Remover a verificação de lista:
-                # response_list_recent = response_recent.json()
-                # if response_list_recent and isinstance(response_list_recent, list) and isinstance(response_list_recent[0], dict):
-                #     data_recent = response_list_recent[0]
-                
+
                 # A resposta já é o dicionário que precisamos
                 if isinstance(raw_response_recent, dict) and 'posts' in raw_response_recent:
                     data_recent = raw_response_recent # Usar diretamente o dicionário recebido
-                # ---------------------------------------------------------
+                    # ---------------------------------------------------------
 
                     all_recent_posts = data_recent.get('posts', [])
                     if isinstance(all_recent_posts, dict):
                         all_recent_posts = [all_recent_posts]
-                    
+
                     logger.info(f"Recebidos {len(all_recent_posts)} posts recentes do webhook.")
-                    
+
                     # Filtrar para remover o post atual e pegar até 4
                     filtered_recent = [p for p in all_recent_posts if p.get('id') != post_id_str][:4]
                     logger.info(f"Posts recentes filtrados: {len(filtered_recent)} posts.")
-                    
+
                     # Processar dados para o template (data formatada, objeto autor)
                     for p in filtered_recent:
                          if 'created_at' in p:
@@ -281,7 +277,8 @@ def post(post_id):
                     recent_posts_data = filtered_recent
                 else:
                      logger.error(f"Estrutura inesperada da resposta do webhook para posts recentes (esperado dict com 'posts'): {raw_response_recent}")
-            
+            # --- Fim do bloco que precisa ser indentado ---
+
         except requests.RequestException as e_recent:
             logger.error(f"Erro ao buscar posts recentes via webhook: {str(e_recent)}")
             # Não quebra a página, apenas não mostra recentes
@@ -305,7 +302,7 @@ def post(post_id):
         
         # Log content just before rendering, regardless of preview status, for comparison
         logger.debug(f"Flask: Final display_content before render_template: {repr(display_content)}")
-
+        
         return render_template('public/post.html', 
                                post=post_obj, 
                                display_content=display_content,
@@ -923,7 +920,7 @@ def email_marketing_form():
 def blog_form():
     logger.info("--- Executando a rota blog_form() ---") # Add log here
     # Use the MemberConsultingForm for this route as well
-    form = MemberConsultingForm()
+    form = MemberConsultingForm() 
     form_action_endpoint = 'main.blog_form' # Define endpoint name for THIS route
 
     # Capture UTMs on GET (same logic)
@@ -959,8 +956,8 @@ def blog_form():
             # --------------------- 
         }
 
-        # Use the SAME webhook URL
-        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK')
+        # Use the SAME webhook URL 
+        webhook_url = os.environ.get('N8N_MEMBER_FORM_WEBHOOK') 
 
         if not webhook_url:
             logger.error("N8N_MEMBER_FORM_WEBHOOK not configured.")
@@ -983,9 +980,9 @@ def blog_form():
             # ----------------------------------
             
             # Re-render the MEMBER form template with the LONG success message
-            return render_template('forms/member_form.html',
-                                   submission_success=True,
-                                   success_message=success_message,
+            return render_template('forms/member_form.html', 
+                                   submission_success=True, 
+                                   success_message=success_message, 
                                    form_action_endpoint=form_action_endpoint)
 
         except requests.RequestException as e:

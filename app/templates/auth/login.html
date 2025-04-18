@@ -18,7 +18,7 @@
                     {% if otp_sent %}
                         {# --- Show OTP Verification Form --- #}
                         <p class="text-center mb-3">A login code has been sent to <strong>{{ email }}</strong>.</p>
-                        <form method="POST" action="{{ url_for('auth.login') }}">
+                        <form method="POST" action="{{ url_for('auth.login') }}" data-login-url="{{ url_for('auth.login') }}">
                             {{ otp_form.hidden_tag() if otp_form else '' }}
                             <div class="form-group mb-3">
                                 {{ otp_form.otp.label(class="form-label") }}
@@ -38,7 +38,7 @@
                         </div>
                     {% else %}
                         {# --- Show Email Form --- #}
-                        <form method="POST" action="{{ url_for('auth.login') }}">
+                        <form method="POST" action="{{ url_for('auth.login') }}" id="login-form" data-login-url="{{ url_for('auth.login') }}">
                             {# {{ login_form.hidden_tag() if login_form else '' }} # Try explicit field instead #}
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/> {# EXPLICIT CSRF FIELD #}
                             <div class="form-group mb-3">

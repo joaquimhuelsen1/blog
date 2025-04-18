@@ -141,12 +141,40 @@
                             {% endif %}
                         </div>
 
+                        <!-- Moved User provided text block -->
+                        <div class="mt-3 text-muted" style="font-size: 1.05em; color: #000000 !important;">
+                            <p class="mb-1">
+                                NOTE: If you choose email, send me a quick email with "Hey, I've sent the form" to: 
+                                <a href="mailto:ethan@thereconquestmap.com">ethan@thereconquestmap.com</a>
+                            </p>
+                            <p class="mb-0">
+                                so your email provider recognizes mine as trusted.
+                            </p>
+                            <p class="mt-2 mb-0">
+                                Once you send the email, I’ll confirm receipt within 24 hours — though I usually reply to this first message within a few hours. So keep an eye on your inbox, promotions tab, or spam folder.
+
+
+
+
+
+
+
+
+                            </p>
+                        </div>
+                        <!-- End Moved User provided text block -->
+
                         <hr>
 
                         <!-- Centered Submit Button -->
                         <div class="text-center mt-4">
                             {{ form.submit(class="btn btn-primary btn-lg") }}
                         </div>
+
+                        <!-- User provided text block -->
+                        <!-- THIS BLOCK IS MOVED ABOVE -->
+                        <!-- End User provided text block -->
+
                     </form>
                 {% endif %}
                 {# --- End Conditional Display --- #}

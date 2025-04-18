@@ -13,6 +13,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Hide flash messages after 3 seconds
     setupFlashMessages();
 
+    // --- FINAL LOGIN BUTTON DISABLE LOGIC (No OTP version) ---
+    const loginForm = document.querySelector('form'); // Select the VERY FIRST form on the page
+    // Check if the form exists and its action points to the login route
+    if (loginForm && loginForm.action && loginForm.action.includes('/auth/login')) { 
+        console.log("Login form found:", loginForm);
+        loginForm.addEventListener('submit', function(event) {
+            console.log("Submit event detected on form:", this);
+            const submitButton = this.querySelector('input[type="submit"], button[type="submit"]');
+            if (submitButton && !submitButton.disabled) {
+                 console.log("Disabling button, setting text to LOADING..., and applying styles...");
+                 submitButton.disabled = true;
+                 // Set text to LOADING... for both input and button types
+                 if (submitButton.tagName === 'INPUT') { 
+                     submitButton.value = 'LOADING...'; 
+                 }
+                 else { 
+                     submitButton.textContent = 'LOADING...'; // Use textContent for button
+                 }
+                 // Apply the standard primary button loading style
+                 submitButton.style.backgroundColor = '#C60000';
+                 submitButton.style.borderColor = '#C60000'; // Also set border color for consistency
+                 submitButton.style.color = '#FFFFFF';
+            } else {
+                 console.log("Button already disabled or not found");
+            }
+        });
+    } else {
+        console.log("Login form not found on the page.");
+    }
+    // --- END FINAL LOGIN BUTTON DISABLE LOGIC ---
+
     // Improve mobile menu transition
     const navbarToggler = document.querySelector('.navbar-toggler');
     const navbarCollapse = document.querySelector('.navbar-collapse');
