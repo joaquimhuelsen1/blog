@@ -2,7 +2,7 @@ import stripe
 import os
 import requests
 from flask import Blueprint, request, redirect, url_for, current_app, session, flash, render_template, jsonify
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, logout_user
 from app import csrf
 
 payments_bp = Blueprint('payments', __name__)
@@ -54,53 +54,61 @@ def create_checkout_session():
 @payments_bp.route('/checkout-success')
 @login_required
 def checkout_success():
-    """Page shown after successful checkout. Attempts to update session immediately."""
+    """Handle successful checkout: Log user out and redirect to login with flash message."""
     session_id = request.args.get('session_id')
-    
+
     if not session_id:
         flash("Checkout session ID missing.", "warning")
-        return render_template('payments/checkout_success.html')
+        # Mesmo sem session_id, vamos redirecionar para login se chegar aqui
+        logout_user()
+        flash('Your Premium access activation is processing. Please log in again shortly.', 'info')
+        return redirect(url_for('auth.login'))
 
     try:
         stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
         checkout_session = stripe.checkout.Session.retrieve(session_id)
-        
-        # Verify the session status and user
-        if checkout_session.payment_status == 'paid' or checkout_session.status == 'complete': # Status might be 'complete' for trials
+
+        # Verify the session status and user *before* logging out
+        if checkout_session.payment_status == 'paid' or checkout_session.status == 'complete':
             client_reference_id = checkout_session.get('client_reference_id')
-            stripe_customer_id = checkout_session.get('customer')
-            stripe_subscription_id = checkout_session.get('subscription')
-            
+
             # Security check: Ensure the session belongs to the logged-in user
             if client_reference_id == str(current_user.id):
-                current_app.logger.info(f"Checkout session {session_id} confirmed for user {current_user.id}.")
-                
-                # Update Flask session data immediately
-                user_data = session.get('user_data', {}) # Get existing or empty dict
-                user_data['is_premium'] = True
-                user_data['stripe_customer_id'] = stripe_customer_id
-                user_data['stripe_subscription_id'] = stripe_subscription_id
-                
-                session['user_data'] = user_data
-                session.modified = True
-                current_app.logger.info(f"Flask session updated for user {current_user.id}: is_premium=True, customer={stripe_customer_id}")
-                flash("Payment successful! Your Premium access is now active.", "success") # More definitive message
+                current_app.logger.info(f"Checkout session {session_id} confirmed for user {current_user.id}. Logging out and redirecting.")
+                # Desloga o usuário
+                logout_user()
+                # Define a mensagem flash
+                flash('Your Premium access has been successfully activated! Please log in again to enjoy the benefits.', 'success')
+                # Redireciona para a página de login
+                return redirect(url_for('auth.login'))
             else:
-                current_app.logger.warning(f"Security mismatch: Checkout session {session_id} client_ref_id ({client_reference_id}) does not match logged in user ({current_user.id}).")
-                flash("There was an issue confirming your payment session. Please contact support if your access is not updated shortly.", "warning")
+                current_app.logger.warning(f"Security mismatch: Checkout session {session_id} client_ref_id ({client_reference_id}) does not match logged in user ({current_user.id}). Logging out.")
+                logout_user()
+                flash("There was an issue confirming your payment session. Please log in again. Contact support if your access is not updated shortly.", "warning")
+                return redirect(url_for('auth.login'))
         else:
-             current_app.logger.warning(f"Checkout session {session_id} status was not 'paid' or 'complete': {checkout_session.status} / {checkout_session.payment_status}")
-             flash("Your payment is processing. Your access will be updated once payment is confirmed.", "info")
+             current_app.logger.warning(f"Checkout session {session_id} status was not 'paid' or 'complete': {checkout_session.status} / {checkout_session.payment_status}. Logging out.")
+             logout_user()
+             flash("Your payment is processing. Please log in again shortly to check your access status.", "info")
+             return redirect(url_for('auth.login'))
 
     except stripe.error.StripeError as e:
-        current_app.logger.error(f"Stripe API error retrieving session {session_id}: {e}")
-        flash("Could not verify payment session details. Your access will be updated via webhook.", "warning")
+        current_app.logger.error(f"Stripe API error retrieving session {session_id}: {e}. Logging out.")
+        logout_user()
+        flash("Could not verify payment session details. Please log in again. Your access will be updated via webhook.", "warning")
+        return redirect(url_for('auth.login'))
     except Exception as e:
-        current_app.logger.error(f"Unexpected error processing checkout success for session {session_id}: {e}")
-        flash("An unexpected error occurred. Your access will be updated via webhook.", "warning")
+        current_app.logger.error(f"Unexpected error processing checkout success for session {session_id}: {e}. Logging out.")
+        logout_user()
+        flash("An unexpected error occurred. Please log in again. Your access will be updated via webhook.", "warning")
+        return redirect(url_for('auth.login'))
 
-    # Always render the success template
-    return render_template('payments/checkout_success.html')
+    # Fallback: Se algo muito inesperado acontecer antes do redirect,
+    # ainda desloga e redireciona para login.
+    current_app.logger.error(f"Reached end of checkout_success unexpectedly for session {session_id}. Logging out.")
+    logout_user()
+    flash("An unexpected event occurred during checkout confirmation. Please log in again.", "danger")
+    return redirect(url_for('auth.login'))
 
 @payments_bp.route('/checkout-cancel')
 def checkout_cancel():
